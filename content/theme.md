@@ -59,7 +59,7 @@ link: https://github.com/L33Z22L11/blog-v3
 ::link-card
 ---
 title: 组件样式示例
-link: /previews/example
+link: https://blog.zhilu.site/previews/example
 class: gradient-card active
 ---
 #icon
@@ -72,7 +72,7 @@ class: gradient-card active
 ---
 banner: https://assets.zhilu.cyou/cover3/blog-using-nuxt.jpg
 title: 博客进化：从 Hexo 到 Nuxt Content
-link: /2024/blog-using-nuxt
+link: https://blog.zhilu.site/2024/blog-using-nuxt
 ---
 ::
 

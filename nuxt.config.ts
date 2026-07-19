@@ -235,6 +235,8 @@ ${packageJson.homepage}
 			'no-non-ascii-chars',
 			'no-uppercase-chars',
 		],
+		// 内部死链仅警告，不要阻断 SSG 构建（友链页有第三方不可控）
+		error: false,
 	},
 
 	llms: {

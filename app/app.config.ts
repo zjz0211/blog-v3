@@ -57,7 +57,7 @@ export default defineAppConfig({
 		copyright: `© ${Temporal.Now.plainDateISO().year.toString()} ${blogConfig.author.name}`,
 		/** 侧边栏底部图标导航 */
 		iconNav: [
-			{ icon: 'tabler:home', text: '个人主页', url: blogConfig.author.homepage },
+			{ icon: 'tabler:home', text: '个人主页', url: '/' },
 			{ icon: 'tabler:brand-github', text: 'GitHub: zjz0211', url: 'https://github.com/zjz0211' },
 			{ icon: 'tabler:rss', text: 'Atom订阅', url: '/atom.xml' },
 			{ icon: 'ri:subway-line', text: '开往 - 博客下一站', url: 'https://www.travellings.cn/go.html' },
