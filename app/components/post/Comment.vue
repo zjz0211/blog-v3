@@ -1,6 +1,10 @@
 <script setup lang="tsx">
 import type { TippyComponent } from 'vue-tippy'
 
+interface WindowWithGiscus extends Window {
+	giscus?: any
+}
+
 const appConfig = useAppConfig()
 
 const commentEl = useTemplateRef('comment')
@@ -8,6 +12,9 @@ const popoverEl = useTemplateRef<TippyComponent>('popover')
 const popoverJumpTo = ref('')
 const popoverInputEl = useTemplateRef('popover-input')
 const showUndo = ref(false)
+
+const giscusContainer = ref<HTMLDivElement>()
+const giscusLang = appConfig.language.replace('-', '_')
 
 const popoverBind = ref<TippyComponent['$props']>({})
 
@@ -51,12 +58,48 @@ function confirmOpen() {
 	window.open(popoverInputEl.value?.textContent, '_blank')
 }
 
+const giscusLoaded = ref(false)
+useEventListener(window, 'message', (event: MessageEvent) => {
+	if (event.origin === 'https://giscus.app' && event.data) {
+		try {
+			const data = JSON.parse(event.data)
+			if (data?.giscus) {
+				giscusLoaded.value = true
+			}
+		} catch {}
+	}
+})
+
+// Giscus 加载中 —— 通过 blog.config.ts scripts 注入；挂载时机由 window.twikoo 替换为 giscus 配置
+// @ts-ignore
+useHead({
+	script: [
+		{
+			src: 'https://giscus.app/client.js',
+			'data-repo': 'zjz0211/blog-v3',
+			'data-repo-id': 'R_kgDOTdK1IA',
+			'data-category': 'Announcements',
+			'data-category-id': 'DIC_kwDOTdK1IM4DBhFP',
+			'data-mapping': 'pathname',
+			'data-strict': '0',
+			'data-reactions-enabled': '1',
+			'data-emit-metadata': '0',
+			'data-input-position': 'top',
+			'data-theme': 'preferred_color_scheme',
+			'data-lang': 'zh-CN',
+			crossorigin: 'anonymous',
+			async: true,
+			onload: () => {
+				setTimeout(() => {
+					window.giscus?.setIsDiscussionTerm()
+				}, 500)
+			},
+		},
+	],
+})
+
 onMounted(() => {
-	window.twikoo?.init?.({
-		envId: appConfig.twikoo?.envId,
-		// twikoo 会把挂载后的元素变为 #twikoo
-		el: '#twikoo',
-	})
+	// giscus.app/client.js 加载完成后会寻找 #giscus 容器
 })
 </script>
 
@@ -104,9 +147,8 @@ onMounted(() => {
 		</template>
 	</Tooltip>
 
-	<div id="twikoo">
-		<p>评论加载中...</p>
-	</div>
+	<div id="giscus" ref="giscusContainer" />
+	<p v-if="!giscusLoaded" class="giscus-loading">评论加载中...</p>
 </section>
 </template>
 
