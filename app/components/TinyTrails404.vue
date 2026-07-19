@@ -1,20 +1,4 @@
 <script setup lang="ts">
-import type { NuxtError } from '#app'
-
-defineProps<{
-	error: NuxtError & { url?: string }
-}>()
-
-// 注入 Inter 字体到 <head>
-useHead({
-	link: [
-		{ rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-		{ rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-		{ rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap' },
-	],
-	title: '404 - Page Not Found',
-})
-
 const scaleY = ref(1)
 const textRef = ref<HTMLElement>()
 const menuOpen = ref(false)
@@ -32,24 +16,11 @@ onMounted(() => {
 	recalc()
 	window.addEventListener('resize', recalc)
 })
+onUnmounted(() => window.removeEventListener('resize', recalc))
 
-onUnmounted(() => {
-	window.removeEventListener('resize', recalc)
-	bodyScrollLock(false)
+watch(menuOpen, (open) => {
+	if (import.meta.client) document.body.style.overflow = open ? 'hidden' : ''
 })
-
-// 滚动锁定
-watch(menuOpen, (open) => bodyScrollLock(open))
-
-function bodyScrollLock(lock: boolean) {
-	if (import.meta.client) {
-		document.body.style.overflow = lock ? 'hidden' : ''
-	}
-}
-
-function goHome() {
-	clearError({ redirect: '/' })
-}
 
 function closeMenu() {
 	menuOpen.value = false
@@ -59,7 +30,7 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 </script>
 
 <template>
-<div class="w-full h-screen overflow-hidden flex flex-col relative error-404-root" style="background: linear-gradient(to bottom, #FF8233 0%, #FDAC55 100%); font-family: 'Inter', sans-serif;">
+<div class="w-full h-screen overflow-hidden flex flex-col relative" style="background: linear-gradient(to bottom, #FF8233 0%, #FDAC55 100%); font-family: 'Inter', system-ui, sans-serif;">
 	<!-- Background "404" + Oval -->
 	<div
 		class="absolute inset-0 pointer-events-none flex items-center justify-center"
@@ -84,7 +55,6 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 
 	<!-- Navigation Bar -->
 	<nav class="relative z-20 flex items-center justify-between px-4 sm:px-6 md:px-12 py-4 sm:py-5">
-		<!-- Logo -->
 		<div class="flex items-center">
 			<div class="grid grid-cols-2 gap-0.5">
 				<div class="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-full" />
@@ -94,27 +64,10 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 			</div>
 			<span class="text-white font-bold text-lg sm:text-xl ml-1">TinyTrails</span>
 		</div>
-
-		<!-- Desktop nav links -->
 		<div class="hidden md:flex flex-row gap-1">
-			<a
-				v-for="item in navItems"
-				:key="item"
-				href="/"
-				class="px-4 py-1.5 text-sm font-medium rounded-full bg-white hover:opacity-90 transition-colors"
-				style="color: #F16524;"
-			>
-				{{ item }}
-			</a>
+			<a v-for="item in navItems" :key="item" href="/" class="px-4 py-1.5 text-sm font-medium rounded-full bg-white hover:opacity-90 transition-colors" style="color: #F16524;">{{ item }}</a>
 		</div>
-
-		<!-- Mobile menu button -->
-		<button
-			type="button"
-			class="flex md:hidden items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white hover:opacity-90 transition-colors"
-			style="background-color: #F16524;"
-			@click="menuOpen = true"
-		>
+		<button type="button" class="flex md:hidden items-center gap-2 px-4 py-2 sm:px-5 sm:py-2.5 rounded-full text-white hover:opacity-90 transition-colors" style="background-color: #F16524;" @click="menuOpen = true">
 			<Icon name="tabler:menu" class="w-4 h-4" />
 			<span class="text-sm font-medium hidden sm:inline">Menu</span>
 		</button>
@@ -126,22 +79,12 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 		style="transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);"
 		:class="menuOpen ? 'visible' : 'invisible'"
 	>
-		<!-- Backdrop -->
-		<button
-			type="button"
-			aria-label="Close menu"
-			class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-500"
-			:class="menuOpen ? 'opacity-100' : 'opacity-0'"
-			@click="closeMenu"
-		/>
-
-		<!-- Panel -->
+		<button type="button" aria-label="Close menu" class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-500" :class="menuOpen ? 'opacity-100' : 'opacity-0'" @click="closeMenu" />
 		<div
 			class="absolute top-0 right-0 h-full w-full sm:w-[380px] transition-transform duration-500"
 			style="background: linear-gradient(135deg, #FF6B1A 0%, #FF9642 100%); transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);"
 			:class="menuOpen ? 'translate-x-0' : 'translate-x-full'"
 		>
-			<!-- Panel header -->
 			<div class="flex items-center justify-between px-6 py-5">
 				<div class="flex items-center">
 					<div class="grid grid-cols-2 gap-0.5">
@@ -152,17 +95,8 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 					</div>
 					<span class="text-white font-bold text-lg sm:text-xl ml-1">TinyTrails</span>
 				</div>
-				<button
-					type="button"
-					class="w-10 h-10 rounded-full text-white hover:bg-white/30 flex items-center justify-center transition-colors"
-					style="background-color: rgba(255,255,255); background-color: rgba(255,255,255,0.2);"
-					@click="closeMenu"
-				>
-					<Icon name="tabler:x" class="w-5 h-5" />
-				</button>
+				<button type="button" class="w-10 h-10 rounded-full text-white hover:bg-white/30 flex items-center justify-center transition-colors" style="background-color: rgba(255,255,255,0.2);" @click="closeMenu"><Icon name="tabler:x" class="w-5 h-5" /></button>
 			</div>
-
-			<!-- Menu items (staggered) -->
 			<div class="px-6 py-4 flex flex-col gap-3">
 				<a
 					v-for="(item, i) in navItems"
@@ -171,17 +105,10 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 					class="px-6 py-4 text-lg font-semibold text-white rounded-2xl transition-all duration-300"
 					style="background-color: rgba(255,255,255,0.1);"
 					:class="menuOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'"
-					:style="{
-						transitionDelay: menuOpen ? `${150 + i * 60}ms` : '0ms',
-						backgroundColor: 'rgba(255,255,255,0.1)',
-					}"
+					:style="{ transitionDelay: menuOpen ? `${150 + i * 60}ms` : '0ms' }"
 					@click="closeMenu"
-				>
-					{{ item }}
-				</a>
+				>{{ item }}</a>
 			</div>
-
-			<!-- Bottom CTA -->
 			<div
 				class="absolute bottom-0 left-0 right-0 p-6 transition-all duration-500"
 				:style="{ transitionDelay: menuOpen ? '450ms' : '0ms', opacity: menuOpen ? 1 : 0 }"
@@ -200,20 +127,9 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 	</div>
 
 	<!-- Center Video -->
-	<div
-		class="absolute inset-0 flex items-center justify-center pointer-events-none"
-		style="margin-top: calc(-6vh - 40px);"
-	>
+	<div class="absolute inset-0 flex items-center justify-center pointer-events-none" style="margin-top: calc(-6vh - 40px);">
 		<div class="w-[120vw] h-[85vh] sm:w-[70vw] sm:h-[70vh] md:w-[62vw] md:h-[78vh]">
-			<video
-				autoplay
-				loop
-				muted
-				playsinline
-				preload="none"
-				class="w-full h-full object-contain pointer-events-none"
-				style="mix-blend-mode: darken;"
-			>
+			<video autoplay loop muted playsinline preload="none" class="w-full h-full object-contain pointer-events-none" style="mix-blend-mode: darken;">
 				<source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260713_234424_b1332b69-2e69-4302-8dbc-40f86846afbd.mp4" type="video/mp4">
 			</video>
 		</div>
@@ -221,15 +137,8 @@ const navItems = ['About Us', 'Programs', 'Reviews', 'FAQ', 'Contacts']
 
 	<!-- Bottom Content -->
 	<div class="relative z-30 mt-auto pb-8 sm:pb-16 flex flex-col items-center text-center px-4">
-		<h2 class="text-white text-lg sm:text-xl md:text-2xl font-medium mb-3 sm:mb-4">
-			Oops, something went wrong!
-		</h2>
-		<button
-			type="button"
-			class="inline-flex items-center gap-2 px-6 py-3 sm:px-8 sm:py-4 rounded-full text-white font-semibold text-sm sm:text-base hover:scale-105 hover:shadow-lg transition-all"
-			style="background-color: #F16524;"
-			@click="goHome"
-		>
+		<h2 class="text-white text-lg sm:text-xl md:text-2xl font-medium mb-3 sm:mb-4">Oops, something went wrong!</h2>
+		<button type="button" class="inline-flex items-center gap-2 px-6 py-3 sm:px-8 sm:py-4 rounded-full text-white font-semibold text-sm sm:text-base hover:scale-105 hover:shadow-lg transition-all" style="background-color: #F16524;" @click="navigateTo('/')">
 			<Icon name="tabler:arrow-left" class="w-4 h-4 sm:w-5 sm:h-5" />
 			Back to Home
 		</button>
