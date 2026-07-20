@@ -16,7 +16,7 @@
     "dev": "nuxt dev --open",
     "dev:host": "nuxt dev --host",
     "build": "nuxt build",
-    "generate": "nuxt generate && node scripts/copy-404.mjs",
+    "generate": "nuxt generate",
     "preview": "nuxt preview",
     "bump": "pnpx taze -w && rimraf node_modules pnpm-lock.yaml && pnpm dedupe",
     "lint": "eslint && stylelint '**/*.{vue,scss}'",
