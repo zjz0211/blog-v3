@@ -1,0 +1,5 @@
+{
+  "framework": "nuxtjs",
+  "buildCommand": "pnpm generate",
+  "outputDirectory": ".output/public"
+}
