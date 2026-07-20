@@ -1,4 +1,4 @@
 {
   "framework": "nuxtjs",
-  "buildCommand": "pnpm generate"
+  "buildCommand": "pnpm build"
 }

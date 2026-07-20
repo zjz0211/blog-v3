@@ -1,8 +1,0 @@
-# chzu老张的小白之路
-
-> 张锦洲的个人博客，记录学习网络安全技术的点滴。一名初学者从入门到退出的折腾之路，分享 CTF、渗透、开发的技术笔记与思考。
-
-## Content
-
-- [Link](https://zjz946649.top/raw/link.md)
-- [主题](https://zjz946649.top/raw/theme.md)
