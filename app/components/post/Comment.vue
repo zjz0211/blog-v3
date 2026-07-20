@@ -91,7 +91,7 @@ useHead({
 			async: true,
 			onload: () => {
 				setTimeout(() => {
-					window.giscus?.setIsDiscussionTerm()
+					try { (window.giscus)?.setIsDiscussionTerm?.() } catch {}
 				}, 500)
 			},
 		},
