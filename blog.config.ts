@@ -7,7 +7,7 @@ const basicConfig = {
 	description: '张锦洲的个人博客，记录学习网络安全技术的点滴。一名初学者从入门到退出的折腾之路，分享 CTF、渗透、开发的技术笔记与思考。',
 	author: {
 		name: '张锦洲',
-		avatar: '/avatar.svg',
+		avatar: '/avatar.jpg',
 		email: '3084295605@qq.com',
 		homepage: 'https://zjz946649.top',
 	},
