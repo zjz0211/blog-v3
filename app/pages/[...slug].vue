@@ -22,21 +22,25 @@ onMounted(() => {
         window.location.replace('/404-page/')
     }
 })
+
+// 文章页侧边栏：显示目录（TOC）
+const { widgets } = useWidgets(post.value ? ['toc'] : [])
 </script>
 
 <template>
-    <NuxtLayout v-if="post">
-        <template #aside>
-            <component :is="widget.comp" v-for="widget in widgets" :key="widget.name" />
-        </template>
+    <!-- aside 透传到 app.vue 的 NuxtLayout（不再嵌套第二层 NuxtLayout，避免页面重合） -->
+    <template #aside>
+        <component :is="widget.comp" v-for="widget in widgets" :key="widget.name" />
+    </template>
 
+    <div v-if="post">
         <PostHeader v-bind="post" />
         <PostExcerpt v-if="excerpt" :excerpt />
         <ContentRenderer class="article" :class="getPostTypeClassName(post?.type, { prefix: 'md' })" :value="post" tag="article" />
         <PostFooter v-bind="post" />
         <PostSurround />
         <PostComment />
-    </NuxtLayout>
+    </div>
 
     <div v-else class="w-full h-screen flex items-center justify-center" style="background: #1a1a2e;">
         <p class="text-white/60 text-lg" style="font-family: system-ui, sans-serif;">Loading...</p>
