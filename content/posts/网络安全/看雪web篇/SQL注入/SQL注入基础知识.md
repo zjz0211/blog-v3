@@ -3,6 +3,7 @@ title: SQL注入基础知识
 date: 2026-03-16 21:12:20
 categories: [看雪web篇, SQL注入]
 path: /kan-xue-web/sql-injection/sql-basics
+description: "简单的说，你可以通过某种方式，执行你想要执行的非功能预期的其他SQL语句。这种攻击方式，我们称之为SQL注入。 ![[Pasted image 20260316210131.png]]"
 ---
 
 ## 1-1 SQL注入的概念
