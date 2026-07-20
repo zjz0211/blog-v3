@@ -2,7 +2,7 @@
 title: PHP面向对象基础
 date: 2026-07-12 09:52:02
 categories: [看雪web篇, 反序列化(对象注入)]
-path: /kan-xue-web/deserialization/php-oop-basics
+permalink: /kan-xue-web/deserialization/php-oop-basics
 description: "**面向对象（Object-Oriented，简称 OO）是一种编程思想和方法，它将程序中的数据和操作数据的方法封装在一起，形成\"对象\"，并通过对象之间的交互和消息传递来完成程序的功能。面向对象编程强调数据的==封装、继承、多态和动态绑定==等特性，使得程序具有更好的可扩展性、可维护性和可重用性。**"
 ---
 
