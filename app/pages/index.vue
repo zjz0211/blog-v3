@@ -8,7 +8,26 @@ useSeoMeta({
 })
 
 const { data: listRaw } = await useAsyncData('posts:index', () => getArticleIndexOptions(), { default: () => [] })
-const { listSorted, isAscending, sortOrder } = useArticleSort(listRaw, { bindDirectionQuery: 'asc', bindOrderQuery: 'sort' })
+
+// web-security 认证：未登录时从首页列表隐藏 web-security 文章
+const wsAuth = useCookie<string>('ws_auth')
+const isWsAuthed = computed(() => {
+  if (!wsAuth.value) return false
+  try {
+    const decStr = import.meta.server ? Buffer.from(wsAuth.value, 'base64').toString('utf8') : atob(wsAuth.value)
+    const decoded = JSON.parse(decStr)
+    return decoded.ok && decoded.hash === 'blog-zjz-web-security-2026' && Date.now() - decoded.time < 3600_000
+  } catch { return false }
+})
+const listFiltered = computed(() => {
+  if (isWsAuthed.value) return listRaw.value
+  return listRaw.value.filter((item: any) => {
+    const p = item.path || item.stem || ''
+    return !p.includes('web-security')
+  })
+})
+
+const { listSorted, isAscending, sortOrder } = useArticleSort(listFiltered, { bindDirectionQuery: 'asc', bindOrderQuery: 'sort' })
 const { category, categories, listCategorized } = useCategory(listSorted, { bindQuery: 'category' })
 const { page, totalPages, listPaged } = usePagination(listCategorized, { bindQuery: 'page' })
 
@@ -41,6 +60,8 @@ const { data: previewCount } = useAsyncData(
 
 <UtilHydrateSafe>
 	<PostSlide v-if="listRecommended.length && page === 1 && !category" :list="listRecommended" />
+
+		<WidgetBlogFolderTree v-if="page === 1 && !category" />
 
 	<div class="post-list">
 		<PostOrderToggle

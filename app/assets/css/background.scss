@@ -1,0 +1,42 @@
+/* 视频背景 — 暗色 orbis / 浅色 linkflow */
+/* 视频切换由 app.vue v-if/v-else 按需渲染，避免同时加载两个视频 */
+
+#bg-video-dark,
+#bg-video-light {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	overflow: hidden;
+
+	video {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	&::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+	}
+}
+
+/* 暗色模式 → orbis 深色宇宙风 */
+#bg-video-dark::after {
+	background: linear-gradient(
+		135deg,
+		hsl(220deg 20% 5% / 90%) 0%,
+		hsl(220deg 20% 8% / 80%) 50%,
+		hsl(220deg 20% 5% / 90%) 100%
+	);
+}
+
+/* 浅色模式 → linkflow 绿色自然风 */
+#bg-video-light::after {
+	background: linear-gradient(
+		135deg,
+		hsl(120deg 15% 92% / 85%) 0%,
+		hsl(100deg 12% 88% / 80%) 50%,
+		hsl(120deg 15% 92% / 85%) 100%
+	);
+}
