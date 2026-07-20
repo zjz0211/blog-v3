@@ -2,6 +2,7 @@
 title: SQL 注入绕过技术
 date: 2026-03-30 18:47:23
 categories: [看雪web篇, SQL注入]
+path: /kan-xue-web/sql-injection/sql-bypass
 ---
 
 

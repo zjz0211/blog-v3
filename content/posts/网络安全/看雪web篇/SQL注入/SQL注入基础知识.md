@@ -2,6 +2,7 @@
 title: SQL注入基础知识
 date: 2026-03-16 21:12:20
 categories: [看雪web篇, SQL注入]
+path: /kan-xue-web/sql-injection/sql-basics
 ---
 
 ## 1-1 SQL注入的概念
