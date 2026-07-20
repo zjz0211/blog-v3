@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="/assets/atom.xsl"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>https://zjz946649.top/</id>
+  <title>chzu老张的小白之路</title>
+  <updated>2026-07-20T10:35:13.664+08:00[Etc/GMT-8]</updated>
+  <description>张锦洲的个人博客，记录学习网络安全技术的点滴。一名初学者从入门到退出的折腾之路，分享 CTF、渗透、开发的技术笔记与思考。</description>
+  <author>
+    <name>张锦洲</name>
+    <email>3084295605@qq.com</email>
+    <uri>https://zjz946649.top</uri>
+  </author>
+  <link href="https://zjz946649.top/atom.xml" rel="self"></link>
+  <link href="https://zjz946649.top/" rel="alternate"></link>
+  <language>zh-CN</language>
+  <generator uri="https://github.com/L33Z22L11/blog-v3" version="3.7.1">Clarity</generator>
+  <icon>/favicon.svg</icon>
+  <logo>/avatar.svg</logo>
+  <rights>© 2026 张锦洲</rights>
+  <subtitle>记录学习网络安全之路，从入门到退出</subtitle>
+</feed>
