@@ -59,7 +59,7 @@ const { data: previewCount } = useAsyncData(
 <BlogHeader class="mobile-only" to="/" tag="h1" />
 
 <UtilHydrateSafe>
-	<PostSlide v-if="listRecommended.length && page === 1 && !category" :list="listRecommended" />
+	<PostSlide v-if="listRecommended.length && !category" :list="listRecommended" />
 
 		<WidgetBlogFolderTree v-if="page === 1 && !category" />
 
