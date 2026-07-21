@@ -58,43 +58,54 @@ const { data: previewCount } = useAsyncData(
 
 <BlogHeader class="mobile-only" to="/" tag="h1" />
 
-<UtilHydrateSafe>
-		<WidgetBlogFolderTree v-if="page === 1 && !category" />
+	<UtilHydrateSafe>
+		<WidgetBlogFolderTree v-if="page === 1 && !category" class="page1-folder-tree" />
 		<PostSlide v-if="listRecommended.length && !category" :list="listRecommended" />
 		<div v-if="page > 1" class="post-list">
-		<PostOrderToggle
-			v-model:is-ascending="isAscending"
-			v-model:sort-order="sortOrder"
-			v-model:category="category"
-			:categories
-		>
-			<ZSecret>
-				<UtilLink v-if="previewCount" to="/preview" class="preview-entrance">
-					<Icon name="tabler:shield-lock" />
-					查看预览文章
-				</UtilLink>
-			</ZSecret>
-		</PostOrderToggle>
+			<PostOrderToggle
+				v-model:is-ascending="isAscending"
+				v-model:sort-order="sortOrder"
+				v-model:category="category"
+				:categories
+			>
+				<ZSecret>
+					<UtilLink v-if="previewCount" to="/preview" class="preview-entrance">
+						<Icon name="tabler:shield-lock" />
+						查看预览文章
+					</UtilLink>
+				</ZSecret>
+			</PostOrderToggle>
 
-		<TransitionGroup tag="menu" class="proper-height" name="float-in">
-			<PostArticle
-				v-for="article, index in listPaged"
-				:key="article.path"
-				v-bind="article"
-				:to="article.path"
-				:use-updated="sortOrder === 'updated'"
-				:style="getFixedDelay(index * 0.05)"
-			/>
-		</TransitionGroup>
+			<TransitionGroup tag="menu" class="proper-height" name="float-in">
+				<PostArticle
+					v-for="article, index in listPaged"
+					:key="article.path"
+					v-bind="article"
+					:to="article.path"
+					:use-updated="sortOrder === 'updated'"
+					:style="getFixedDelay(index * 0.05)"
+				/>
+			</TransitionGroup>
+		</div>
 
 		<ZPagination v-model="page" sticky avoid :total-pages="totalPages" />
-	</div>
-</UtilHydrateSafe>
+	</UtilHydrateSafe>
 </template>
 
 <style lang="scss" scoped>
 .post-list {
 	margin: 1rem;
+}
+
+/* 首页知识库导航占更多空间 */
+.page1-folder-tree {
+	max-width: 100%;
+	font-size: 0.95rem;
+
+	:deep(.tree-node-btn) {
+		padding: 0.45rem 0.5rem;
+		font-size: 0.9rem;
+	}
 }
 
 .float-in-leave-to {

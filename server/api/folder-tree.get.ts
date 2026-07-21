@@ -41,7 +41,7 @@ function buildTreeFromStems(items: { stem: string; path: string }[], authed: boo
         if (!current._files) current._files = []
         current._files.push({ name, url: item.path, stem })
       } else {
-        if (!current[part]) current[part] = {}
+        if (!current[part]) current[part] = { _folderPath: parts.slice(0, i + 1).join("/") }
         current = current[part]
       }
     }
@@ -51,16 +51,17 @@ function buildTreeFromStems(items: { stem: string; path: string }[], authed: boo
     const result: TreeNode[] = []
 
     for (const [key, value] of Object.entries(obj)) {
-      if (key === '_files') continue
+      if (key === '_files' || key === '_folderPath') continue
       const children = toTree(value)
       if (children.length > 0) {
-        result.push({ name: key, path: '', type: 'folder', children })
+			const folderPath = (value as any)._folderPath || key
+        result.push({ name: key, path: folderPath, type: 'folder', children })
       }
     }
 
     if (obj._files) {
       for (const f of obj._files) {
-        result.push({ name: f.name, path: '', type: 'file', url: f.url })
+        result.push({ name: f.name, path: f.stem || f.name, type: 'file', url: f.url })
       }
     }
 
