@@ -2,6 +2,7 @@
 
 title: Dirsearch Sqlmap(Windows)
 date: 2026-07-21
+recommend: 91
 categories: ["web-tools"]
 permalink: /web-tools/dirsearch-sqlmapwindows
 ---

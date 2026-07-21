@@ -21,7 +21,7 @@ export function useArticle(path?: MaybeRefOrGetter<string | undefined>) {
 	 * 封面池：所有文章默认从这里随机选取封面
 	 */
 	const COVER_POOL = [
-		'/images/covers/1.jpeg',
+		'/images/covers/1.jpeg', '/images/covers/12.gif', '/images/covers/13.gif', '/images/covers/14.gif', '/images/covers/15.gif', '/images/covers/16.gif', '/images/covers/17.gif', '/images/covers/18.gif', '/images/covers/19.gif', '/images/covers/20.gif', '/images/covers/21.gif', '/images/covers/22.gif', '/images/covers/23.gif', '/images/covers/24.gif', '/images/covers/25.gif',
 		'/images/covers/2.jpg',
 		'/images/covers/3.jpg',
 		'/images/covers/4.jpg',

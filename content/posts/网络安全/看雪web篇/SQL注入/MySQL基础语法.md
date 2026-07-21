@@ -2,6 +2,7 @@
 
 title: MySQL基础语法
 date: 2026-03-16 20:17:50
+recommend: 93
 categories: [看雪web篇, SQL注入]
 permalink: /mysql-basics
 ---

@@ -2,6 +2,7 @@
 
 title: NewStar2025-WP
 date: 2026-07-21
+recommend: 90
 categories: ["CTF-Writeups","青岑CTF-WP集"]
 permalink: /ctf-writeups-ctf-wp/newstar2025-wp
 ---
