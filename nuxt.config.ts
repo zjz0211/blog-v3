@@ -46,7 +46,11 @@ export default defineNuxtConfig({
 				separator: '|',
 			},
 			titleTemplate: `%s %separator ${blogConfig.title}`,
-			script: blogConfig.scripts,
+			script: [
+				...blogConfig.scripts,
+				// Cloudflare Web Analytics — 零性能开销，不追踪个人
+				{ src: 'https://static.cloudflareinsights.com/beacon.min.js', defer: true, 'data-cf-beacon': '{"token":"977c1fa25e5544149ab917fbf26b3bab"}' },
+			],
 		},
 		rootAttrs: {
 			id: 'blog-root',

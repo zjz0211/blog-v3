@@ -73,8 +73,6 @@ const blogConfig = {
 	scripts: [
 		// 不蒜子博客计数：https://busuanzi.ibruce.info/
 		{ src: 'https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js', defer: true },
-		// Cloudflare Web Analytics — 零性能开销，不追踪个人，无需 Cookie 横幅
-		{ src: 'https://static.cloudflareinsights.com/beacon.min.js', defer: true, 'data-cf-beacon': '{"token":"977c1fa25e5544149ab917fbf26b3bab"}' },
 		// Giscus 评论区脚本已移至 Comment.vue 中按需加载，避免全局加载与组件内重复
 	],
 }
