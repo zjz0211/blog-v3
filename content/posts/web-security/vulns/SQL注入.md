@@ -3,6 +3,7 @@
 title: SQL注入
 date: 2026-07-15
 categories: [web安全, 常见漏洞]
+recommend: 100
 type: tech
 ---
 

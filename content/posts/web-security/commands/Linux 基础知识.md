@@ -3,6 +3,7 @@
 title: Linux 基础知识
 date: 2026-07-15
 categories: [web安全, 常用命令]
+recommend: 95
 type: tech
 permalink: /web-security/commands/linux
 ---

@@ -3,6 +3,7 @@
 title: PHP特性
 date: 2026-07-15
 categories: [web安全, 常见漏洞]
+recommend: 96
 type: tech
 ---
 
