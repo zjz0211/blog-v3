@@ -59,11 +59,9 @@ const { data: previewCount } = useAsyncData(
 <BlogHeader class="mobile-only" to="/" tag="h1" />
 
 <UtilHydrateSafe>
-	<PostSlide v-if="listRecommended.length && !category" :list="listRecommended" />
-
 		<WidgetBlogFolderTree v-if="page === 1 && !category" />
-
-	<div class="post-list">
+		<PostSlide v-if="listRecommended.length && !category" :list="listRecommended" />
+		<div v-if="page > 1" class="post-list">
 		<PostOrderToggle
 			v-model:is-ascending="isAscending"
 			v-model:sort-order="sortOrder"
