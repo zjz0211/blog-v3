@@ -12,7 +12,7 @@ permalink: /sql-injection-basics
 ### 📚 什么是SQL注入？
 
 简单的说，你可以通过某种方式，执行你想要执行的非功能预期的其他SQL语句。这种攻击方式，我们称之为SQL注入。
-![](/images/20260316210131.png)
+![](/images/20260316210131.webp)
 ## 1-2 分辨数字和字符
 
 ### 📚 SQL注入判断的基础知识点
@@ -27,7 +27,7 @@ permalink: /sql-injection-basics
   
 这样做是为了告诉数据库：引号包裹的内容是一个完整的字符串，否则 SQL 会解析报错。  
 **例如：** 如果你写成 `select * from users where username = 小明` 数据库会提示类似 `语法错误 (You have an error in your SQL syntax)` ，因为没有用引号包裹字符串，SQL 解析失败。
-![](/images/20260316210316.png)
+![](/images/20260316210316.webp)
 **小总结：** 只有数字可直接写，字符类（如姓名、邮箱、地址等）都要被引号包裹。
 
 **注意**：上述区分“数字无需引号/字符串必须加引号”的规则，仅是一般情况，目的是保证SQL正常工作和避免语法错误。  
@@ -44,7 +44,7 @@ permalink: /sql-injection-basics
 
   
 重点 SQL注入的判断过程称之为**FUZZ**。 你可能不知道什么是FUZZ，简单来说，就是**不停地“猜”**，直到猜对为止。
-![](/images/20260316210442.png)
+![](/images/20260316210442.webp)
 ## 1-4 闭合+注释
 
 ### 📚 字符串SQL语句怎么闭合
@@ -59,7 +59,7 @@ permalink: /sql-injection-basics
 `select * from users where username = '小明''`
 
 这个时候，前面的 **单引号** 正好把 username 的字符串闭合了
-![](/images/20260316210552.png)
+![](/images/20260316210552.webp)
 ### 🔒 注释的妙用
 
 在SQL语句中，**注释**是一种“让数据库忽略”某些内容的技巧。  

@@ -33,7 +33,7 @@ permalink: /web-tools/dirsearch-sqlmapwindows
 ```
 python3 dirsearch.py -h
 ```
-![](/images/20260719143945.png)
+![](/images/20260719143945.webp)
 #### (3)对网址`<url>`进行目录扫描
 ```
 python3 dirsearch.py -u <目标网址>
@@ -66,7 +66,7 @@ MySQL, Oracle, PostgreSQL, Microsoft SQL Server, Microsoft Access, IBM DB2, SQLi
 - 4、联合查询注入，可以使用union的情况下的注入。
 - 5、堆查询注入，可以同时执行多条语句的执行时的注入。
 ## 3. 使用
-![](/images/20260719152831.png|688)
+![](/images/20260719152831.webp|688)
 ### 3.1常见命令
 #### (1) 输入命令安装依赖
 使用Sqlmap之前需要安装它所需要的依赖(即特定的第三方库)，确保解压的.zip里面有**requirements.txt**文件。
@@ -79,11 +79,11 @@ MySQL, Oracle, PostgreSQL, Microsoft SQL Server, Microsoft Access, IBM DB2, SQLi
 ```
 python3 sqlmap.py -h // 查看基础帮助选项
 ```
-![](/images/20260719152332.png)
+![](/images/20260719152332.webp)
 ```
 python3 sqlmap.py -hh // 查看完整参数说明
 ```
-![](/images/20260719152605.png)
+![](/images/20260719152605.webp)
 #### (3) 检测目标 URL 是否存在注入漏洞
 ```
 python3 sqlmap.py -u "目标网址"

@@ -73,21 +73,7 @@ const blogConfig = {
 	scripts: [
 		// 不蒜子博客计数：https://busuanzi.ibruce.info/
 		{ src: 'https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js', defer: true },
-		// Giscus 评论区（已配置，数据来自 https://giscus.app/zh-CN）
-		{ src: 'https://giscus.app/client.js',
-			'data-repo': 'zjz0211/blog-v3',
-			'data-repo-id': 'R_kgDOTdK1IA',
-			'data-category': 'Announcements',
-			'data-category-id': 'DIC_kwDOTdK1IM4DBhFP',
-			'data-mapping': 'pathname',
-			'data-strict': '0',
-			'data-reactions-enabled': '1',
-			'data-emit-metadata': '0',
-			'data-input-position': 'top',
-			'data-theme': 'preferred_color_scheme',
-			'data-lang': 'zh-CN',
-			'crossorigin': 'anonymous',
-			defer: true },
+		// Giscus 评论区脚本已移至 Comment.vue 中按需加载，避免全局加载与组件内重复
 	],
 }
 

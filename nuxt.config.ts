@@ -33,10 +33,14 @@ export default defineNuxtConfig({
 				// "InterVariable", "Inter", "InterDisplay"
 				{ rel: 'stylesheet', href: 'https://rsms.me/inter/inter.css', media: 'print', onload: 'this.media="all"' },
 				// "JetBrains Mono", 思源宋体 "Noto Serif SC"
+				{ rel: 'preconnect', href: 'https://fonts.googleapis.cn', crossorigin: '' },
 				{ rel: 'preconnect', href: 'https://fonts.gstatic.cn', crossorigin: '' },
 				{ rel: 'stylesheet', href: 'https://fonts.googleapis.cn/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Noto+Serif+SC:wght@200..900&display=swap', media: 'print', onload: 'this.media="all"' },
 				// 抖音美好体 "DOUYINSANSBOLD-GB"
+				{ rel: 'preconnect', href: 'https://fonts.bytedance.com', crossorigin: '' },
 				{ rel: 'stylesheet', href: 'https://fonts.bytedance.com/dfd/api/v1/css?family=DOUYINSANSBOLD-GB&display=swap', media: 'print', onload: 'this.media="all"' },
+				// 视频背景 CDN
+				{ rel: 'preconnect', href: 'https://d8j0ntlcm91z4.cloudfront.net' },
 			],
 			templateParams: {
 				separator: '|',

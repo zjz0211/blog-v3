@@ -70,36 +70,34 @@ useEventListener(window, 'message', (event: MessageEvent) => {
 	}
 })
 
-// Giscus 加载中 —— 通过 blog.config.ts scripts 注入；挂载时机由 window.twikoo 替换为 giscus 配置
-// @ts-ignore
-useHead({
-	script: [
-		{
-			src: 'https://giscus.app/client.js',
-			'data-repo': 'zjz0211/blog-v3',
-			'data-repo-id': 'R_kgDOTdK1IA',
-			'data-category': 'Announcements',
-			'data-category-id': 'DIC_kwDOTdK1IM4DBhFP',
-			'data-mapping': 'pathname',
-			'data-strict': '0',
-			'data-reactions-enabled': '1',
-			'data-emit-metadata': '0',
-			'data-input-position': 'top',
-			'data-theme': 'preferred_color_scheme',
-			'data-lang': 'zh-CN',
-			crossorigin: 'anonymous',
-			async: true,
-			onload: () => {
-				setTimeout(() => {
-					try { (window.giscus)?.setIsDiscussionTerm?.() } catch {}
-				}, 500)
-			},
-		},
-	],
-})
+// Giscus 评论区：onMounted 中动态加载，避免 SSR/水合导致重复注入
+// 配置数据来自 https://giscus.app/zh-CN
+const GISCUS_CONFIG = {
+	src: 'https://giscus.app/client.js',
+	'data-repo': 'zjz0211/blog-v3',
+	'data-repo-id': 'R_kgDOTdK1IA',
+	'data-category': 'Announcements',
+	'data-category-id': 'DIC_kwDOTdK1IM4DBhFP',
+	'data-mapping': 'pathname',
+	'data-strict': '0',
+	'data-reactions-enabled': '1',
+	'data-emit-metadata': '0',
+	'data-input-position': 'top',
+	'data-theme': 'preferred_color_scheme',
+	'data-lang': 'zh-CN',
+	crossOrigin: 'anonymous',
+} as const
 
 onMounted(() => {
-	// giscus.app/client.js 加载完成后会寻找 #giscus 容器
+	// 动态创建 script 标签，确保只加载一次且能找到 .giscus 容器
+	if (document.querySelector('script[src="https://giscus.app/client.js"]')) return
+	const script = document.createElement('script')
+	script.src = GISCUS_CONFIG.src
+	Object.entries(GISCUS_CONFIG).forEach(([key, val]) => {
+		if (key !== 'src') script.setAttribute(key, String(val))
+	})
+	script.async = true
+	document.head.appendChild(script)
 })
 </script>
 
@@ -147,7 +145,7 @@ onMounted(() => {
 		</template>
 	</Tooltip>
 
-	<div id="giscus" ref="giscusContainer" />
+	<div class="giscus" ref="giscusContainer" />
 	<p v-if="!giscusLoaded" class="giscus-loading">评论加载中...</p>
 </section>
 </template>

@@ -21,10 +21,7 @@
     "bump": "pnpx taze -w && rimraf node_modules pnpm-lock.yaml && pnpm dedupe",
     "lint": "eslint && stylelint '**/*.{vue,scss}'",
     "lint:fix": "eslint --fix && stylelint '**/*.{vue,scss}' --fix",
-    "init-project": "unrun scripts/init-project.ts",
-    "new": "unrun scripts/new-blog.ts",
-    "check:feed": "unrun scripts/framework/get-feed.ts",
-    "check:feed/all": "unrun scripts/framework/check-all-feeds.ts"
+    "optimize-images": "npx tsx scripts/optimize-images.ts"
   },
   "dependencies": {
     "@bikariya/image-viewer": "catalog:ui",

