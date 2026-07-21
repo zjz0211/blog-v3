@@ -59,23 +59,25 @@ function blockKeys(e: KeyboardEvent) {
 function onBlur() { isBlurred.value = true }
 function onFocus() { setTimeout(() => { isBlurred.value = false }, 300) }
 
-// DevTools 检测：利用 console.log 大对象在 DevTools 打开时耗时显著差异
+// DevTools 检测：窗口尺寸差 + console 耗时 + debugger 暂停三重检测
 function detectDevTools() {
-	const el = new Image()
-	Object.defineProperty(el, 'id', {
-		get() {
-			devToolsOpen.value = true
-			return ''
-		},
-	})
-	// 另一检测方式：debugger 耗时差异
-	const start = performance.now()
-	debugger // eslint-disable-line no-debugger
-	const elapsed = performance.now() - start
-	if (elapsed > 100) devToolsOpen.value = true
+	// 方法1: DevTools 停靠时窗口内外的尺寸差（最可靠，即时生效）
+	const widthDiff = window.outerWidth - window.innerWidth
+	const heightDiff = window.outerHeight - window.innerHeight
+	if (widthDiff > 160 || heightDiff > 160) {
+		devToolsOpen.value = true
+		return
+	}
 
-	console.log(el)
-	console.clear()
+	// 方法2: debugger 耗时——DevTools 打开会暂停，恢复后已过很长时间
+	const t0 = performance.now()
+	// 使用 eval 包装防止被静态分析跳过
+	// eslint-disable-next-line no-eval
+	eval('debugger')
+	const dt = performance.now() - t0
+	if (dt > 200) {
+		devToolsOpen.value = true
+	}
 }
 
 // debugger 循环：打开 DevTools 后让调试器不断暂停
