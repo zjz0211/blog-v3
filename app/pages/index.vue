@@ -59,8 +59,8 @@ const { data: previewCount } = useAsyncData(
 <BlogHeader class="mobile-only" to="/" tag="h1" />
 
 	<UtilHydrateSafe>
+		<PostSlide v-if="listRecommended.length" :list="listRecommended" />
 		<div v-if="page === 1 && !category" class="page1-layout">
-			<PostSlide v-if="listRecommended.length" :list="listRecommended" />
 			<WidgetBlogFolderTree class="page1-folder-tree" />
 		</div>
 		<div v-if="page > 1" class="post-list">
@@ -99,17 +99,10 @@ const { data: previewCount } = useAsyncData(
 	margin: 1rem;
 }
 
-/* 首页布局：撑满视口，让分页自然贴底 */
-.page1-layout {
-	min-height: calc(100vh - 16rem);
-	display: flex;
-	flex-direction: column;
-}
-
 /* 首页知识库导航占更多空间 */
 .page1-folder-tree {
 	max-width: 100%;
-	margin-top: auto;
+	margin-top: 5rem;
 	font-size: 1rem;
 
 	:deep(.folder-tree-widget) {
