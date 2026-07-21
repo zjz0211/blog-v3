@@ -40,7 +40,9 @@ if (post.value) {
 // 文章内容防复制+截屏保护
 const articleRef = ref<HTMLElement>()
 const isBlurred = ref(false)
+const devToolsOpen = ref(false)
 let debuggerTimer: ReturnType<typeof setInterval> | null = null
+let detectTimer: ReturnType<typeof setInterval> | null = null
 
 function blockCopy(e: ClipboardEvent) {
 	e.preventDefault()
@@ -48,28 +50,35 @@ function blockCopy(e: ClipboardEvent) {
 }
 
 function blockKeys(e: KeyboardEvent) {
-	// 阻止 Ctrl+C/V/S/U/P/X/Print
 	const blocked = ['c', 'v', 's', 'u', 'p', 'x']
-	if (e.ctrlKey && blocked.includes(e.key.toLowerCase())) {
-		e.preventDefault()
-	}
-	// 阻止 F12 / Ctrl+Shift+I,J,C (DevTools) / PrintScreen
+	if (e.ctrlKey && blocked.includes(e.key.toLowerCase())) e.preventDefault()
 	if (e.key === 'F12' || e.key === 'PrintScreen') e.preventDefault()
-	if (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) {
-		e.preventDefault()
-	}
+	if (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) e.preventDefault()
 }
 
-// 截屏保护：窗口失去焦点时模糊文章内容
-function onBlur() {
-	isBlurred.value = true
-}
-function onFocus() {
-	// 延迟恢复，避免截屏工具在焦点切换前捕获
-	setTimeout(() => { isBlurred.value = false }, 300)
+function onBlur() { isBlurred.value = true }
+function onFocus() { setTimeout(() => { isBlurred.value = false }, 300) }
+
+// DevTools 检测：利用 console.log 大对象在 DevTools 打开时耗时显著差异
+function detectDevTools() {
+	const el = new Image()
+	Object.defineProperty(el, 'id', {
+		get() {
+			devToolsOpen.value = true
+			return ''
+		},
+	})
+	// 另一检测方式：debugger 耗时差异
+	const start = performance.now()
+	debugger // eslint-disable-line no-debugger
+	const elapsed = performance.now() - start
+	if (elapsed > 100) devToolsOpen.value = true
+
+	console.log(el)
+	console.clear()
 }
 
-// 通过 debugger 循环阻止 DevTools：打开后立即卡死
+// debugger 循环：打开 DevTools 后让调试器不断暂停
 function startDebuggerTrap() {
 	debuggerTimer = setInterval(() => {
 		debugger // eslint-disable-line no-debugger
@@ -82,19 +91,17 @@ onMounted(() => {
 		return
 	}
 
-	// 给文章区域绑定防复制
 	const el = articleRef.value
 	if (!el) return
 	el.addEventListener('copy', blockCopy)
 	el.addEventListener('cut', blockCopy)
 	el.addEventListener('contextmenu', (e) => e.preventDefault())
 	document.addEventListener('keydown', blockKeys)
-
-	// 截屏保护：窗口失焦 → 模糊内容
 	window.addEventListener('blur', onBlur)
 	window.addEventListener('focus', onFocus)
 
-	// 启动 DevTools 检测陷阱
+	// DevTools 检测 + debugger 陷阱
+	detectTimer = setInterval(detectDevTools, 500)
 	startDebuggerTrap()
 })
 
@@ -102,11 +109,8 @@ onUnmounted(() => {
 	document.removeEventListener('keydown', blockKeys)
 	window.removeEventListener('blur', onBlur)
 	window.removeEventListener('focus', onFocus)
-	// 清除 debugger 定时器
-	if (debuggerTimer) {
-		clearInterval(debuggerTimer)
-		debuggerTimer = null
-	}
+	if (debuggerTimer) { clearInterval(debuggerTimer); debuggerTimer = null }
+	if (detectTimer) { clearInterval(detectTimer); detectTimer = null }
 })
 
 const { widgets } = useWidgets(post.value ? ['toc'] : [])
@@ -178,6 +182,13 @@ const showGate = computed(() => isWebSecurity.value && !post.value && !gateCheck
         <WidgetBlogFolderTree />
         <component :is="widget.comp" v-for="widget in widgets" :key="widget.name" />
     </template>
+
+    <!-- DevTools 检测遮罩 -->
+    <div v-if="devToolsOpen" class="devtools-block">
+        <Icon name="tabler:shield-lock" />
+        <h2>请关闭开发者工具</h2>
+        <p>检测到您打开了开发者工具(F12)，请关闭后继续浏览</p>
+    </div>
 
     <div v-if="post" ref="articleRef" class="article-protect" :class="{ blurred: isBlurred }">
         <div class="blur-overlay">
@@ -303,6 +314,25 @@ const showGate = computed(() => isWebSecurity.value && !post.value && !gateCheck
 .blurred {
   .blur-overlay { display: flex; }
   > :not(.blur-overlay) { filter: blur(8px); pointer-events: none; }
+}
+
+// DevTools 检测遮罩
+.devtools-block {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: rgba(0, 0, 0, 0.92);
+  color: #fff;
+  text-align: center;
+  font-size: 1.2rem;
+  h2 { font-size: 2rem; color: #ff4444; }
+  p { color: #aaa; }
+  .iconify { font-size: 4rem; color: #ff4444; }
 }
 
 // 打印保护：隐藏文章内容
