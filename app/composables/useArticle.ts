@@ -18,17 +18,50 @@ export function useArticle(path?: MaybeRefOrGetter<string | undefined>) {
 }
 
 /**
- * 生成文章查询参数，完全包装 useAsyncData 会使 SSR 行为异常，缓存 key 需要暴露
- * @see https://nuxt.com/docs/4.x/api/composables/use-async-data#usage
- * @see https://github.com/nuxt/nuxt/issues/14736
- * @todo 支持分页/分类筛选
- */
-export function getArticleIndexOptions(path = 'posts/%') {
-	return queryCollection('content')
-		.where('stem', 'LIKE', path)
-		.select('categories', 'date', 'description', 'image', 'path', 'readingTime', 'recommend', 'tags', 'title', 'type', 'updated')
-		.all()
-}
+	 * 封面池：所有文章默认从这里随机选取封面
+	 */
+	const COVER_POOL = [
+		'/images/covers/1.jpeg',
+		'/images/covers/2.jpg',
+		'/images/covers/3.jpg',
+		'/images/covers/4.jpg',
+		'/images/covers/5.jpg',
+		'/images/covers/6.jpg',
+		'/images/covers/7.jpg',
+		'/images/covers/8.jpg',
+		'/images/covers/9.jpg',
+		'/images/covers/10.jpg',
+		'/images/covers/11.jpeg',
+	]
+
+	/** 根据文件名哈希选取稳定封面 */
+	function getDefaultCover(path: string) {
+		let hash = 0
+		for (let i = 0; i < path.length; i++)
+			hash = ((hash << 5) - hash + path.charCodeAt(i)) | 0
+		return COVER_POOL[Math.abs(hash) % COVER_POOL.length]
+	}
+
+	/**
+	 * 生成文章查询参数，完全包装 useAsyncData 会使 SSR 行为异常，缓存 key 需要暴露
+	 * @see https://nuxt.com/docs/4.x/api/composables/use-async-data#usage
+	 * @see https://github.com/nuxt/nuxt/issues/14736
+	 * @todo 支持分页/分类筛选
+	 */
+	export async function getArticleIndexOptions(path = 'posts/%') {
+		const list = await queryCollection('content')
+			.where('stem', 'LIKE', path)
+			.select('categories', 'date', 'description', 'image', 'path', 'readingTime', 'recommend', 'tags', 'title', 'type', 'updated')
+			.all()
+
+		// 为没有封面的文章自动分配随机封面
+		for (const item of list) {
+			if (!item.image)
+				item.image = getDefaultCover(item.path || '')
+		}
+
+		return list
+	}
 
 interface UseCategoryOptions {
 	bindQuery?: string
