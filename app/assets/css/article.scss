@@ -5,29 +5,16 @@
 	-webkit-user-select: none;
 	position: relative;
 
-	// 文章水印——截屏保护（半透明文字 + 斜线纹）
+	// 文章水印——截屏保护（SVG 重复铺满，始终可见，截屏必然拍到）
+	$wm-svg: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0MDAnIGhlaWdodD0nMTgwJz48dGV4dCB4PScyMDAnIHk9JzkwJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJyBmb250LXNpemU9JzE1JyBmb250LXdlaWdodD0nYm9sZCcgZmlsbD0ncmdiYSgxMjgsMTI4LDEyOCwwLjE1KScgdHJhbnNmb3JtPSdyb3RhdGUoLTIyLCAyMDAsIDkwKScgZm9udC1mYW1pbHk9J3NhbnMtc2VyaWYnPuW8oOmUpua0siB8IHpqejk0NjY0OS50b3A8L3RleHQ+PC9zdmc+";
 	&::after {
 		content: "";
 		position: fixed;
 		inset: 0;
 		pointer-events: none;
 		z-index: 9999;
-		opacity: 0.08;
-		background:
-			repeating-linear-gradient(
-				-45deg,
-				#666 0px,
-				#666 1px,
-				transparent 1px,
-				transparent 40px
-			),
-			repeating-linear-gradient(
-				45deg,
-				#666 0px,
-				#666 1px,
-				transparent 1px,
-				transparent 40px
-			);
+		background: url($wm-svg) repeat;
+		background-size: 400px 180px;
 	}
 
 	p {
