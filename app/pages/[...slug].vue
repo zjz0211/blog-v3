@@ -37,10 +37,76 @@ if (post.value) {
     route.meta.title = '404'
 }
 
+// 文章内容防复制+截屏保护
+const articleRef = ref<HTMLElement>()
+const isBlurred = ref(false)
+let debuggerTimer: ReturnType<typeof setInterval> | null = null
+
+function blockCopy(e: ClipboardEvent) {
+	e.preventDefault()
+	e.clipboardData?.setData('text/plain', '禁止复制本文内容')
+}
+
+function blockKeys(e: KeyboardEvent) {
+	// 阻止 Ctrl+C/V/S/U/P/X/Print
+	const blocked = ['c', 'v', 's', 'u', 'p', 'x']
+	if (e.ctrlKey && blocked.includes(e.key.toLowerCase())) {
+		e.preventDefault()
+	}
+	// 阻止 F12 / Ctrl+Shift+I,J,C (DevTools) / PrintScreen
+	if (e.key === 'F12' || e.key === 'PrintScreen') e.preventDefault()
+	if (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) {
+		e.preventDefault()
+	}
+}
+
+// 截屏保护：窗口失去焦点时模糊文章内容
+function onBlur() {
+	isBlurred.value = true
+}
+function onFocus() {
+	// 延迟恢复，避免截屏工具在焦点切换前捕获
+	setTimeout(() => { isBlurred.value = false }, 300)
+}
+
+// 通过 debugger 循环阻止 DevTools：打开后立即卡死
+function startDebuggerTrap() {
+	debuggerTimer = setInterval(() => {
+		debugger // eslint-disable-line no-debugger
+	}, 50)
+}
+
 onMounted(() => {
-    if (!post.value && !isWebSecurity.value && !route.path.startsWith('/404-page')) {
-        window.location.replace('/404-page/')
-    }
+	if (!post.value && !isWebSecurity.value && !route.path.startsWith('/404-page')) {
+		window.location.replace('/404-page/')
+		return
+	}
+
+	// 给文章区域绑定防复制
+	const el = articleRef.value
+	if (!el) return
+	el.addEventListener('copy', blockCopy)
+	el.addEventListener('cut', blockCopy)
+	el.addEventListener('contextmenu', (e) => e.preventDefault())
+	document.addEventListener('keydown', blockKeys)
+
+	// 截屏保护：窗口失焦 → 模糊内容
+	window.addEventListener('blur', onBlur)
+	window.addEventListener('focus', onFocus)
+
+	// 启动 DevTools 检测陷阱
+	startDebuggerTrap()
+})
+
+onUnmounted(() => {
+	document.removeEventListener('keydown', blockKeys)
+	window.removeEventListener('blur', onBlur)
+	window.removeEventListener('focus', onFocus)
+	// 清除 debugger 定时器
+	if (debuggerTimer) {
+		clearInterval(debuggerTimer)
+		debuggerTimer = null
+	}
 })
 
 const { widgets } = useWidgets(post.value ? ['toc'] : [])
@@ -113,7 +179,11 @@ const showGate = computed(() => isWebSecurity.value && !post.value && !gateCheck
         <component :is="widget.comp" v-for="widget in widgets" :key="widget.name" />
     </template>
 
-    <div v-if="post">
+    <div v-if="post" ref="articleRef" class="article-protect" :class="{ blurred: isBlurred }">
+        <div class="blur-overlay">
+            <Icon name="tabler:shield-lock" />
+            <span>请勿截屏传播</span>
+        </div>
         <PostHeader v-bind="post" />
         <PostExcerpt v-if="excerpt" :excerpt />
         <ContentRenderer class="article" :class="getPostTypeClassName(post?.type, { prefix: 'md' })" :value="post" tag="article" />
@@ -207,5 +277,44 @@ const showGate = computed(() => isWebSecurity.value && !post.value && !gateCheck
   font-size: 0.9rem; font-weight: 500; cursor: pointer;
   &:hover { opacity: 0.9; }
   &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+// 截屏保护：窗口失焦时模糊 + 蒙层
+.article-protect {
+  position: relative;
+}
+.blur-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 1rem;
+  font-size: 1rem;
+  color: #fff;
+  pointer-events: none;
+}
+.blurred {
+  .blur-overlay { display: flex; }
+  > :not(.blur-overlay) { filter: blur(8px); pointer-events: none; }
+}
+
+// 打印保护：隐藏文章内容
+@media print {
+  .article-protect > :not(.blur-overlay) {
+    display: none !important;
+  }
+  .blur-overlay {
+    display: flex !important;
+    position: fixed;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 </style>

@@ -40,6 +40,10 @@ const debouncedSelection = refDebounced(text)
 				</li>
 			</menu>
 		</template>
+
+		<div class="sidebar-gif">
+			<img src="/images/臭臭.gif" alt="臭臭" loading="lazy" />
+		</div>
 	</nav>
 
 	<footer class="sidebar-footer">
@@ -156,5 +160,18 @@ const debouncedSelection = refDebounced(text)
 	font-size: 0.8em;
 	text-align: center;
 	color: var(--c-text-2);
+}
+
+.sidebar-gif {
+	margin-top: 0.75rem;
+	text-align: center;
+
+	img {
+		width: 100%;
+		max-width: 240px;
+		border-radius: 0.5rem;
+		display: block;
+		margin: 0 auto;
+	}
 }
 </style>
