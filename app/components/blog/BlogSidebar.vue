@@ -42,7 +42,7 @@ const debouncedSelection = refDebounced(text)
 		</template>
 
 		<div class="sidebar-gif">
-			<img src="/images/臭臭.gif" alt="臭臭" loading="lazy" />
+			<img src="/images/chouchou.gif" alt="臭臭" loading="lazy" />
 		</div>
 	</nav>
 
