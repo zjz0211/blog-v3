@@ -1,4 +1,15 @@
 <script setup lang="ts">
+// Cloudflare Web Analytics — 零性能开销，不追踪个人，无需 Cookie 横幅
+useHead({
+  script: [
+    {
+      src: 'https://static.cloudflareinsights.com/beacon.min.js',
+      'data-cf-beacon': JSON.stringify({ token: '977c1fa25e5544149ab917fbf26b3bab' }),
+      defer: true,
+    },
+  ],
+})
+
 // 只在客户端加载当前主题对应的视频，避免同时加载两个视频导致卡顿
 const colorMode = useColorMode()
 const isDark = computed(() => colorMode.value === 'dark')
