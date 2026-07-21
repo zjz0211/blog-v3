@@ -59,8 +59,10 @@ const { data: previewCount } = useAsyncData(
 <BlogHeader class="mobile-only" to="/" tag="h1" />
 
 	<UtilHydrateSafe>
-		<WidgetBlogFolderTree v-if="page === 1 && !category" class="page1-folder-tree" />
-		<PostSlide v-if="listRecommended.length && !category" :list="listRecommended" />
+		<div v-if="page === 1 && !category" class="page1-layout">
+			<PostSlide v-if="listRecommended.length" :list="listRecommended" />
+			<WidgetBlogFolderTree class="page1-folder-tree" />
+		</div>
 		<div v-if="page > 1" class="post-list">
 			<PostOrderToggle
 				v-model:is-ascending="isAscending"
@@ -97,14 +99,39 @@ const { data: previewCount } = useAsyncData(
 	margin: 1rem;
 }
 
+/* 首页布局：撑满视口，让分页自然贴底 */
+.page1-layout {
+	min-height: calc(100vh - 16rem);
+	display: flex;
+	flex-direction: column;
+}
+
 /* 首页知识库导航占更多空间 */
 .page1-folder-tree {
 	max-width: 100%;
-	font-size: 0.95rem;
+	margin-top: auto;
+	font-size: 1rem;
+
+	:deep(.folder-tree-widget) {
+		padding: 1.5rem 1.8rem;
+	}
+
+	:deep(.tree-title) {
+		font-size: 1.15rem;
+		margin-bottom: 1rem;
+	}
 
 	:deep(.tree-node-btn) {
-		padding: 0.45rem 0.5rem;
-		font-size: 0.9rem;
+		padding: 0.55rem 0.6rem;
+		font-size: 0.98rem;
+	}
+
+	:deep(.tree-icon) {
+		font-size: 1.15rem;
+	}
+
+	:deep(.tree-count) {
+		font-size: 0.78rem;
 	}
 }
 
