@@ -57,10 +57,13 @@ function blockKeys(e: KeyboardEvent) {
 }
 
 function onBlur() {
-  // 焦点进入评论区 iframe（Giscus）时不触发模糊保护
-  const active = document.activeElement
-  if (active?.tagName === 'IFRAME') return
-  isBlurred.value = true
+  // 延迟检查：blur 事件触发时 activeElement 还未更新到 iframe
+  setTimeout(() => {
+    const active = document.activeElement
+    // 焦点进入了评论区 iframe，不触发模糊保护
+    if (active?.tagName === 'IFRAME') return
+    isBlurred.value = true
+  }, 0)
 }
 function onFocus() { isBlurred.value = false }
 
