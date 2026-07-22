@@ -1,5 +1,4 @@
 ---
-
 title: Git 基础知识
 date: 2026-07-15
 categories: [web安全, 常用命令]
@@ -7,127 +6,177 @@ type: tech
 permalink: /web-security/commands/git
 ---
 
+# Git 基础知识（CTF 实战版）
 
+> CTF 中 Git 的核心用途：** 从 `.git` 泄露中恢复完整源码和历史记录**。开发者把整个项目目录部署上线，忘了删 `.git` 文件夹——你的机会来了。
 
+---
 
-# 1. Git 基础知识
+## 场景：发现 .git 泄露后怎么办？
 
-CTF 中 Git 主要和 `.git` 泄露有关——开发者把整个项目目录部署上线，你可以通过 `.git` 目录还原出完整源码和历史记录。
+```
+第1步：确认泄露
+  访问 http://target.com/.git/HEAD
+  返回 ref: refs/heads/master →  确认泄露！
 
-## 1.1 Git
+第2步：用工具拉取整个仓库
+  python GitHack.py http://target.com/.git/
+  或 ./git-dumper http://target.com/.git/ output/
 
-Git 是一种版本管理工具，用来记录代码的修改历史，即 Git 可以记录一个项目从创建到后续修改的所有变化。
-
-常见用途：
-
-| 用途     | 说明                   |
-| -------- | ---------------------- |
-| 版本管理 | 记录代码每次修改       |
-| 代码回退 | 回到之前的代码版本     |
-| 分支管理 | 同时维护不同版本代码   |
-| 协作开发 | 多个人一起维护一个项目 |
-
-在 Web CTF 中，Git 常见于 `.git` 泄露，可以通过 Git 历史记录恢复源码、账号密码、密钥等敏感信息。
-
-## 1.2 常见 Git 文件和目录
-
-Git 项目中最重要的是 `.git` 目录，它保存了项目的版本记录。
-
-常见文件和目录如下：
-
-| 文件 / 目录     | 说明             |
-| --------------- | ---------------- |
-| `.git/`         | Git 版本管理目录 |
-| `.git/config`   | Git 配置信息     |
-| `.git/HEAD`     | 当前分支指针     |
-| `.git/logs/`    | Git 操作日志     |
-| `.git/objects/` | Git 对象数据     |
-| `.git/index`    | 暂存区信息       |
-
-例如：
-
-```text
-www/
-├── index.php
-├── config.php
-└── .git/
+第3步：挖掘历史
+  git log                    → 看看提交过什么
+  git show <commit_id>       → 看看某次提交的内容
+  git diff <old> <new>       → 看看两次提交之间改了什么
+  → flag 经常藏在"删除敏感信息"的那次提交里！
 ```
 
-如果 Web 目录下的 `.git/` 可以被访问，就可能存在 Git 泄露。
+---
 
-## 1.3 .git 泄露基础
+## 一、.git 目录结构
 
-`.git` 泄露是指网站把 Git 版本管理目录暴露到了 Web 目录下。
-
-例如访问：
-
-```text
-http://example.com/.git/HEAD
+```
+.git/
+├── HEAD          → 当前分支指针（访问它确认泄露存在）
+├── config        → 仓库配置（可能有远程地址等）
+├── index         → 暂存区（记录文件列表和状态）
+├── logs/
+│   └── HEAD      → 操作历史（比 git log 更全）
+├── objects/      → Git 对象数据库（所有文件的所有版本都在这里！）
+└── refs/
+    └── heads/    → 分支引用
 ```
 
-如果返回类似内容：
+**确认泄露的关键 URL：**
 
-```text
-ref: refs/heads/master
-```
+| 路径 | 正常返回值 | 说明 |
+|------|-----------|------|
+| `/.git/HEAD` | `ref: refs/heads/master` |  最常用的确认方式 |
+| `/.git/config` | `[core]` 等配置内容 | 查看仓库配置 |
+| `/.git/index` | 二进制数据 | 文件索引 |
+| `/.git/logs/HEAD` | 提交记录 | 操作历史 |
 
-说明 `.git` 目录可能可以访问。
+---
 
-常见泄露路径：
-
-| 路径              | 说明                  |
-| ----------------- | --------------------- |
-| `/.git/HEAD`      | 判断是否存在 Git 泄露 |
-| `/.git/config`    | 查看 Git 配置         |
-| `/.git/index`     | 恢复项目文件结构      |
-| `/.git/logs/HEAD` | 查看历史提交记录      |
-
-## 1.4 常见 Git 命令
-
-Git 常用命令如下：
-
-| 命令           | 说明                     |
-| -------------- | ------------------------ |
-| `git status`   | 查看当前仓库状态         |
-| `git log`      | 查看提交历史             |
-| `git reflog`   | 查看更完整的历史操作记录 |
-| `git diff`     | 查看代码差异             |
-| `git branch`   | 查看分支                 |
-| `git checkout` | 切换分支或恢复文件       |
-| `git reset`    | 回退版本                 |
-| `git show`     | 查看某次提交内容         |
-
-例如：
+## 二、恢复工具
 
 ```bash
-git log
+# 方式1：GitHack（最简单，推荐新手）
+python GitHack.py http://target.com/.git/
+
+# 方式2：git-dumper（更稳定，重建完整 git 仓库）
+./git-dumper http://target.com/.git/ output_dir/
+
+# 方式3：GitTools 三件套
+bash gitdumper.sh http://target.com/.git/ output_dir/
+
+# 特殊情况处理：
+# - 目录列不出来但文件能访问 → 工具通常能自动处理
+# - 只有 objects 可读没有 index → 用 git cat-file 逐个解析
 ```
 
-表示查看项目的提交历史。
+---
+
+## 三、拉下来后怎么挖 flag
+
+### 3.1 查看提交历史
 
 ```bash
-git show <commit_id>
+git log                        # 完整历史，每次提交的 hash、作者、时间、说明
+git log --oneline              # 简洁版（一行一条）
+git log --all --oneline        # 包括其他分支
+git reflog                     # 更全的历史（包括 reset、rebase 等操作）
 ```
 
-表示查看某次提交具体修改了什么内容。
+### 3.2 查看具体内容
 
-## 1.5 Git 历史记录和源码恢复
-
-Git 会保存项目的历史版本，所以即使某些敏感信息后来被删除，也可能还能从历史提交中找到。
-
-例如开发者曾经提交过：
-
-```php
-$password = "admin123";
+```bash
+git show <commit_id>                    # 查看某次提交的完整变更
+git show <commit_id>:path/to/file.php   # 查看某次提交时某个文件的内容
+git diff <commit1> <commit2>            # 比较两次提交的差异
+git diff HEAD~1 HEAD                   # 比较最新提交和上一次
 ```
 
-后来虽然删除了这行代码，但 Git 历史记录中可能仍然存在。
+### 3.3 切换版本
 
-常见查看方式：
+```bash
+git checkout <commit_id>        # 切换到某个历史版本
+git checkout master             # 回到最新版本
+git checkout -b test <commit>   # 从历史版本创建新分支
+```
 
-| 命令                           | 说明               |
-| ------------------------------ | ------------------ |
-| `git log`                      | 查看历史提交       |
-| `git show <commit_id>`         | 查看某次提交内容   |
-| `git diff <commit1> <commit2>` | 对比两个版本差异   |
-| `git checkout <commit_id>`     | 切换到某个历史版本 |
+---
+## 四、CTF 常见场景
+
+### 场景1：flag 在历史提交中被删除
+
+```bash
+# 开发者曾经提交过 flag 或密码，后来删掉了
+# 但 Git 记录了所有历史！
+
+git log --all -p | grep -A 5 -B 5 "flag{"
+# -p 显示每次提交的具体改动
+# grep 筛选包含 flag{ 的行及其上下文
+```
+
+### 场景2：敏感信息在 commit message 中
+
+```bash
+# 开发者可能把密码写在提交说明里
+git log --all | grep -i -E "password|secret|key|flag|token"
+```
+
+### 场景3：flag 藏在其他分支
+
+```bash
+git branch -a                  # 列出所有分支（本地+远程）
+git checkout dev-branch        # 切换到 dev 分支看看
+git log --all --oneline        # 查看所有分支的提交
+```
+
+### 场景4：flag 在 git stash 里
+
+```bash
+git stash list                 # 查看暂存列表
+git stash show -p              # 查看暂存内容
+```
+
+### 场景5：找某个文件的所有历史版本
+
+```bash
+# 找到删除过 flag 相关文件的提交
+git log --all --diff-filter=D --summary | grep -E "flag|secret|password"
+
+# 查看那个文件在删除前的内容
+git show <commit_before_delete>:path/to/file
+```
+
+---
+
+## 五、Git 命令速查
+
+| 命令 | 作用 | CTF 使用时机 |
+|------|------|------------|
+| `git log` | 查看提交历史 | 了解项目演变 |
+| `git log -p` | 查看历史+详细改动 |  搜索 flag |
+| `git reflog` | 完整操作历史 | 发现被隐藏的操作 |
+| `git show <id>` | 查看某次提交 | 看具体改了什么 |
+| `git diff A B` | 比较差异 | 看两次提交间的变化 |
+| `git branch -a` | 所有分支 | flag 可能在别的分支 |
+| `git checkout <id>` | 切换版本 | 恢复到历史版本 |
+| `git stash list` | 暂存列表 | 可能藏有未提交的代码 |
+| `git stash show -p` | 查看暂存 | 同上 |
+
+---
+
+## 知识总结
+
+| 阶段 | 关键操作 |
+|------|---------|
+|**确认泄露**| 访问 `/.git/HEAD`，看是否返回 `ref: refs/heads/…` |
+|**恢复源码**| GitHack / git-dumper / GitTools |
+|**查看历史**| `git log --all -p` |
+|**搜索 flag**| `git log --all -p \| grep "flag{"` |
+|**切换版本**| `git checkout <commit_id>` |
+|**搜 commit 信息**| `git log --all \| grep -i password` |
+
+>**新手避坑：** `git log` 不会显示被 `git reset` 撤销的提交。用 `git reflog` 可以看到更完整的历史，包括那些"消失"的提交。另外，不是所有返回 200 的 `/.git/HEAD` 都能完整拉取——有些服务器禁止目录列表但不禁止直接访问已知文件，工具通常能自动处理这种情况。
