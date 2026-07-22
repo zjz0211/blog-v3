@@ -56,8 +56,15 @@ function blockKeys(e: KeyboardEvent) {
 	if (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) e.preventDefault()
 }
 
-function onBlur() { isBlurred.value = true }
-function onFocus() { setTimeout(() => { isBlurred.value = false }, 300) }
+let lastCommentClick = 0
+function onCommentClick() { lastCommentClick = Date.now() }
+
+function onBlur() {
+  // 如果最近 500ms 内点击了评论区（Giscus iframe 获取焦点），不触发模糊
+  if (Date.now() - lastCommentClick < 500) return
+  isBlurred.value = true
+}
+function onFocus() { isBlurred.value = false }
 
 // DevTools 检测：窗口尺寸差 + console 耗时 + debugger 暂停三重检测
 function detectDevTools() {
@@ -101,6 +108,13 @@ onMounted(() => {
 	document.addEventListener('keydown', blockKeys)
 	window.addEventListener('blur', onBlur)
 	window.addEventListener('focus', onFocus)
+
+	// 监听评论区点击，防止评论输入时触发截屏模糊
+	const commentEl = document.querySelector('.giscus')
+	if (commentEl) {
+		commentEl.addEventListener('click', onCommentClick)
+		commentEl.addEventListener('mousedown', onCommentClick)
+	}
 
 	// DevTools 检测 + debugger 陷阱
 	detectTimer = setInterval(detectDevTools, 500)
