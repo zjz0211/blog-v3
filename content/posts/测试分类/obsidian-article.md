@@ -10,6 +10,6 @@ draft: false
 
 这是一篇来自 Obsidian 的文章，图片用 wiki 语法插入：
 
-![obsidian-test](/images/20260807173240.png)
+![obsidian-test](/images/20260807173339.png)
 
 段落结束。
