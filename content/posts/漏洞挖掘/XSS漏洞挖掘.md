@@ -5,6 +5,7 @@ tags: []
 categories:
   - 漏洞挖掘
 slug: XSS漏洞挖掘
+permalink: /xss-vuln-hunting
 draft: false
 ---
 
@@ -223,8 +224,8 @@ trailer << /Root 1 0 R >>
 - 也可以搜现成的 `xss.pdf` 生成工具直接生成带 JS 的 PDF;
 - 判断该不该报:能证明在受害浏览器里执行了脚本才算数,浏览器内置预览器不弹窗就不算。
 
-![PDF XSS 案例截图](xss_images/p10_img01.png)
-![PDF XSS 案例截图 2](xss_images/p10_img02.png)
+![PDF XSS 案例截图](/images/20260808155004.png)
+![PDF XSS 案例截图 2](/images/20260808155005.png)
 
 ## 7.2 Html XSS(存储桶)
 
@@ -244,8 +245,8 @@ trailer << /Root 1 0 R >>
 - 存储桶场景注意:桶域名和主站不同源时只算"存储型 XSS 或存储桶接管"级别,报漏洞时写清楚域名关系;
 - 看响应 `Content-Type` 是不是 `text/html`,是才能执行脚本(如果被强制为 `application/octet-stream` 就不会执行)。
 
-![Html XSS 存储桶案例](xss_images/p11_img01.png)
-![Html XSS 存储桶案例 2](xss_images/p11_img02.png)
+![Html XSS 存储桶案例](/images/20260808155006.png)
+![Html XSS 存储桶案例 2](/images/20260808155007.png)
 
 ## 7.3 SVG XSS
 
@@ -295,8 +296,8 @@ PDF 里给的现成复现链接:`https://xss.smarpo.com/test.json`(攻击者可�
 - 打之前先确认版本:`< 3.23.11` 基本都可触发;
 - 报漏洞时写明:CVE-2019-17495 + 触发链接。
 
-![swagger XSS 案例](xss_images/p12_img01.png)
-![swagger XSS 案例 2](xss_images/p12_img02.png)
+![swagger XSS 案例](/images/20260808155009.png)
+![swagger XSS 案例 2](/images/20260808155010.png)
 
 ## 8.2 jsonp 导致的XSS
 
@@ -323,9 +324,9 @@ alert(document.cookie)//({"name":"xxx"})
 - 能弹窗/能读到返回数据 → 报反射型 XSS 或 JSONP 劫持(看是否泄露敏感数据);
 - 这就是开头说的"企业 src,callback 是 xss 的重点灾区"。
 
-![jsonp XSS 案例](xss_images/p13_img01.png)
-![jsonp XSS 案例 2](xss_images/p13_img02.png)
-![jsonp XSS 案例 3](xss_images/p13_img03.png)
+![jsonp XSS 案例](/images/20260808155011.png)
+![jsonp XSS 案例 2](/images/20260808155012.png)
+![jsonp XSS 案例 3](/images/20260808155013.png)
 
 # 9、CRLF注入导致的XSS
 
@@ -349,8 +350,8 @@ https://victim.com/page?x=%0a%0d%0a%0d%0a<script>alert('xss')</script>
 - 现代框架/中间件大多默认拦截 CRLF,能打出来的站点说明比较老,直接报高危;
 - 注意现代浏览器对响应拆分已经比较免疫,但**响应头注入(Set-Cookie)仍然成立**,漏洞价值不减。
 
-![CRLF 注入案例](xss_images/p14_img01.png)
-![CRLF 注入案例 2](xss_images/p15_img01.png)
+![CRLF 注入案例](/images/20260808155014.png)
+![CRLF 注入案例 2](/images/20260808155015.png)
 
 # 10、编辑器链接处XSS
 
