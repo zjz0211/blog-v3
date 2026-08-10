@@ -60,6 +60,10 @@ const { data: previewCount } = useAsyncData(
 
 	<UtilHydrateSafe>
 		<PostSlide v-if="listRecommended.length" :list="listRecommended" />
+		<div v-if="page === 1 && !category" class="disclaimer-banner">
+			<Icon name="tabler:alert-triangle" class="disclaimer-icon" />
+			<span>该博客只用作知识分享，请勿用于其他用途，出任何事情与博主无关！！</span>
+		</div>
 		<div v-if="page === 1 && !category" class="page1-layout">
 			<WidgetBlogFolderTree class="page1-folder-tree" />
 		</div>
@@ -125,6 +129,30 @@ const { data: previewCount } = useAsyncData(
 
 	:deep(.tree-count) {
 		font-size: 0.78rem;
+	}
+}
+
+/* 免责声明横幅 */
+.disclaimer-banner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	margin: 2rem auto;
+	padding: 1rem 2rem;
+	max-width: 720px;
+	border: 1px solid var(--c-warning, #f0ad4e);
+	border-radius: 8px;
+	background: var(--c-warning-soft, #fff8e1);
+	color: var(--c-warning-fg, #8b6914);
+	font-size: 0.92rem;
+	font-weight: 500;
+	line-height: 1.6;
+	text-align: center;
+
+	.disclaimer-icon {
+		flex-shrink: 0;
+		font-size: 1.2rem;
 	}
 }
 
