@@ -23,7 +23,7 @@ const listFiltered = computed(() => {
   if (isWsAuthed.value) return listRaw.value
   return listRaw.value.filter((item: any) => {
     const p = item.path || item.stem || ''
-    return !p.includes('web-security')
+    return !p.includes('web-security') && !p.includes('漏洞挖掘')
   })
 })
 
@@ -38,7 +38,7 @@ watch(category, () => {
 useSeoMeta({ title: () => (page.value > 1 ? `第${page.value}页` : '') })
 
 const listRecommended = computed(() => orderBy(
-	listRaw.value.filter(item => item.recommend !== null && !item.path?.includes('web-security')),
+	listRaw.value.filter(item => item.recommend !== null && !item.path?.includes('web-security') && !item.path?.includes('漏洞挖掘')),
 	['recommend', 'date'],
 	['desc'],
 ))

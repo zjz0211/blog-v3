@@ -5,7 +5,7 @@ tags: []
 categories:
   - 漏洞挖掘
 slug: XSS漏洞挖掘
-permalink: /xss-vuln-hunting
+permalink: /漏洞挖掘/xss-vuln-hunting
 draft: false
 ---
 

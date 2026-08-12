@@ -1,11 +1,12 @@
 <script setup lang="ts">
 const route = useRoute()
-const isWebSecurity = computed(() => route.path.startsWith('/web-security/'))
+const PROTECTED_PREFIXES = ['/web-security/', '/漏洞挖掘/']
+const isProtected = computed(() => PROTECTED_PREFIXES.some(p => route.path.startsWith(p)))
 
 // 认证检查：SSR 和客户端都读 cookie，保持 needGate 一致
 const wsAuthCookie = useCookie<string>('ws_auth')
-let needGate = isWebSecurity.value
-if (isWebSecurity.value) {
+let needGate = isProtected.value
+if (isProtected.value) {
   const token = wsAuthCookie.value
   if (token) {
     try {
@@ -30,7 +31,7 @@ const excerpt = computed(() => post.value?.description || '')
 
 if (post.value) {
     useSeoMeta({ title: post.value.title, ogType: '', ogImage: post.value.image, description: post.value.description })
-} else if (!isWebSecurity.value) {
+} else if (!isProtected.value) {
     const event = useRequestEvent()
     if (event) setResponseStatus(event, 404)
     useHead({ title: '404 - Page Not Found' })
@@ -96,7 +97,7 @@ function startDebuggerTrap() {
 }
 
 onMounted(() => {
-	if (!post.value && !isWebSecurity.value && !route.path.startsWith('/404-page')) {
+	if (!post.value && !isProtected.value && !route.path.startsWith('/404-page')) {
 		window.location.replace('/404-page/')
 		return
 	}
@@ -135,7 +136,7 @@ const gateLoading = ref(false)
 const gateChecking = ref(true)
 
 onMounted(async () => {
-  if (!isWebSecurity.value) return
+  if (!isProtected.value) return
   // 如果 SSR 已经认证通过（内容已加载），不再检查
   if (post.value) return
 
@@ -184,7 +185,7 @@ async function gateSubmit() {
   gateLoading.value = false
 }
 
-const showGate = computed(() => isWebSecurity.value && !post.value && !gateChecking.value)
+const showGate = computed(() => isProtected.value && !post.value && !gateChecking.value)
 </script>
 
 <template>
@@ -246,7 +247,7 @@ const showGate = computed(() => isWebSecurity.value && !post.value && !gateCheck
     </div>
 
     <!-- 检查中 -->
-    <div v-else-if="isWebSecurity" class="gate-wrap">
+    <div v-else-if="isProtected" class="gate-wrap">
       <div class="gate-card">
         <Icon name="tabler:loader-2" class="animate-spin" style="font-size:2rem;color:var(--c-primary);" />
       </div>

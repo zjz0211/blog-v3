@@ -44,5 +44,9 @@
   "/202403/boot-management": "/2024/boot-management",
   "/202403/helping-day": "/2024/helping-day",
   "/202404/archlinux-boot-repair": "/2024/archlinux-boot-repair",
-  "/202404/magic-code": "/2024/magic-code"
+  "/202404/magic-code": "/2024/magic-code",
+  "/post-6e2c64": "/漏洞挖掘/信息收集",
+  "/xss-vuln-hunting": "/漏洞挖掘/xss-vuln-hunting",
+  "/post-9969da": "/漏洞挖掘/重放与并发漏洞",
+  "/sql": "/漏洞挖掘/sql注入漏洞挖掘和绕过"
 }

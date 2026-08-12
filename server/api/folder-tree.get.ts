@@ -9,8 +9,9 @@ interface TreeNode {
 }
 
 const COOKIE_SECRET = 'blog-zjz-web-security-2026'
+const PROTECTED_STEMS = ['web-security', '漏洞挖掘']
 
-function isWebSecurityAuthed(event: any): boolean {
+function isAuthed(event: any): boolean {
   const token = getCookie(event, 'ws_auth')
   if (!token) return false
   try {
@@ -27,7 +28,7 @@ function buildTreeFromStems(items: { stem: string; path: string }[], authed: boo
     if (stem.startsWith('posts/')) stem = stem.slice(6)
     if (!stem) continue
 
-    if (!authed && stem.startsWith('web-security')) continue
+    if (!authed && PROTECTED_STEMS.some(s => stem.startsWith(s))) continue
 
     const parts = stem.split('/')
     let current = root
@@ -77,7 +78,7 @@ function buildTreeFromStems(items: { stem: string; path: string }[], authed: boo
 }
 
 export default defineEventHandler(async (event): Promise<TreeNode[]> => {
-  const authed = isWebSecurityAuthed(event)
+  const authed = isAuthed(event)
 
   const items = await queryCollection(event, 'content')
     .where('stem', 'LIKE', 'posts/%')
@@ -92,6 +93,12 @@ export default defineEventHandler(async (event): Promise<TreeNode[]> => {
       path: '/web-security',
       type: 'file',
       url: '/web-security/vulns/xss',
+    })
+    tree.push({
+      name: '🔒 漏洞挖掘（需验证）',
+      path: '/漏洞挖掘',
+      type: 'file',
+      url: '/漏洞挖掘/信息收集',
     })
   }
 
